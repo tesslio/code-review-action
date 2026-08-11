@@ -1,0 +1,215 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { test } from 'node:test';
+
+import {
+  buildPublicArtifact,
+  writePublicArtifact,
+} from '../src/public-artifact.mjs';
+
+async function writeArtifactFrom(resultContents) {
+  const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
+  const resultPath = join(directory, 'result.json');
+  const artifactPath = join(directory, 'public-result.json');
+  if (resultContents !== undefined) {
+    await writeFile(resultPath, resultContents, 'utf8');
+  }
+
+  try {
+    const artifact = await writePublicArtifact({ resultPath, artifactPath });
+    return {
+      artifact,
+      written: JSON.parse(await readFile(artifactPath, 'utf8')),
+    };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+test('builds artifacts from an explicit field allowlist', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: {
+        schemaVersion: 1,
+        runId: 'run-1',
+        profileName: 'standard',
+        model: 'model-1',
+        effort: 'high',
+        subject: { change: { headRevision: 'head' } },
+        judgement: 'Looks good.',
+        approved: true,
+        findings: [
+          {
+            id: 'finding-1',
+            title: 'Optional cleanup',
+            requiresChanges: false,
+          },
+        ],
+        reconciliation: [],
+      },
+      diagnostics: { durationMs: 123, extraMetrics: { value: 900 } },
+      unpublishedField: 'not-for-artifact',
+    },
+    publication: { schemaVersion: 1, status: 'published', reviewId: 7 },
+    requestedLenses: '["tessl/code-review#review-security"]',
+  });
+
+  assert.equal(artifact.schemaVersion, 1);
+  assert.equal(artifact.diagnostics.durationMs, 123);
+  assert.deepEqual(artifact.configuration, {
+    profile: 'standard',
+    model: 'model-1',
+    effort: 'high',
+    lenses: ['tessl/code-review#review-security'],
+  });
+  assert.equal(artifact.publication.reviewId, 7);
+  assert.equal(artifact.outcome.approved, true);
+  assert.equal(artifact.outcome.findings[0].requiresChanges, false);
+  const json = JSON.stringify(artifact);
+  assert.doesNotMatch(json, /extraMetrics|unpublishedField|not-for-artifact/);
+});
+
+test('drops an unexpected field from the outcome and the failure', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: {
+        runId: 'run-1',
+        approved: false,
+        promptText: 'do-not-publish',
+        subject: {
+          repository: 'https://github.com/acme/widgets.git',
+          change: { headRevision: 'head', diff: 'do-not-publish' },
+        },
+        findings: [
+          {
+            id: 'finding-1',
+            title: 'Validate the input',
+            body: 'The value is used before validation.',
+            severity: 'major',
+            requiresChanges: true,
+            disposition: 'new',
+            lensRefs: ['tessl/code-review#review-security'],
+            location: { path: 'a.ts', line: 2, side: 'RIGHT', snippet: 'do-not-publish' },
+            evidence: ['do-not-publish'],
+          },
+        ],
+        reconciliation: [
+          {
+            category: 'addressed',
+            priorFindingId: 'prior-1',
+            transcript: 'do-not-publish',
+          },
+        ],
+      },
+      failure: { kind: 'review-failed', message: 'Review failed.', stack: 'do-not-publish' },
+    },
+  });
+
+  assert.doesNotMatch(JSON.stringify(artifact), /do-not-publish/);
+  assert.deepEqual(artifact.outcome.findings[0], {
+    id: 'finding-1',
+    title: 'Validate the input',
+    body: 'The value is used before validation.',
+    severity: 'major',
+    requiresChanges: true,
+    disposition: 'new',
+    lensRefs: ['tessl/code-review#review-security'],
+    location: { path: 'a.ts', line: 2, side: 'RIGHT' },
+  });
+  assert.deepEqual(artifact.outcome.subject, {
+    repository: 'https://github.com/acme/widgets.git',
+    change: { headRevision: 'head' },
+  });
+  assert.deepEqual(artifact.outcome.reconciliation, [
+    { category: 'addressed', priorFindingId: 'prior-1' },
+  ]);
+  assert.deepEqual(artifact.failure, {
+    kind: 'review-failed',
+    message: 'Review failed.',
+  });
+});
+
+test('publishes a finding that carries its location flat on the finding', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: {
+        runId: 'run-1',
+        approved: false,
+        findings: [
+          {
+            id: 'finding-1',
+            title: 'Validate the input',
+            requiresChanges: true,
+            path: 'a.ts',
+            line: 2,
+            side: 'RIGHT',
+            reason: 'The line is outside the reviewed diff.',
+            evidence: ['do-not-publish'],
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(artifact.outcome.findings[0], {
+    id: 'finding-1',
+    title: 'Validate the input',
+    requiresChanges: true,
+    path: 'a.ts',
+    line: 2,
+    side: 'RIGHT',
+    reason: 'The line is outside the reviewed diff.',
+  });
+});
+
+test('records a structured CLI failure without requiring publication', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'failed',
+      failure: { kind: 'review-failed', message: 'Review failed.' },
+      diagnostics: { durationMs: 50 },
+    },
+  });
+
+  assert.equal(artifact.status, 'failed');
+  assert.deepEqual(artifact.failure, {
+    kind: 'review-failed',
+    message: 'Review failed.',
+  });
+  assert.equal(artifact.publication, null);
+});
+
+test('records a failure when the result file is missing', async () => {
+  const { written } = await writeArtifactFrom(undefined);
+
+  assert.equal(written.status, 'failed');
+  assert.equal(written.publication, null);
+});
+
+test('records a failure when the result file is empty', async () => {
+  const { written } = await writeArtifactFrom('');
+
+  assert.equal(written.status, 'failed');
+  assert.equal(written.publication, null);
+});
+
+test('records a failure when the result file holds only whitespace', async () => {
+  const { written } = await writeArtifactFrom('  \n\t\n');
+
+  assert.equal(written.status, 'failed');
+  assert.equal(written.publication, null);
+});
+
+test('records the reported status when the result file holds JSON', async () => {
+  const { written } = await writeArtifactFrom(
+    JSON.stringify({ status: 'ok', diagnostics: { durationMs: 42 } }),
+  );
+
+  assert.equal(written.status, 'ok');
+  assert.equal(written.diagnostics.durationMs, 42);
+});
