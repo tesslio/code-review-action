@@ -64,10 +64,10 @@ The default configuration runs the `standard` profile in advisory mode.
 ```
 
 Passing `lenses` replaces the profile's default lens selection with the exact
-ordered JSON array. Pin registry references so the review does not change when
-a plugin publishes a new version. The selected profile owns review
-implementation details, which are not supported customer workflow
-configuration.
+ordered JSON array. A review supports at most 5 lenses. Pin registry
+references so the review does not change when a plugin publishes a new
+version. The selected profile owns review implementation details, which are
+not supported customer workflow configuration.
 
 See [Action contract](docs/action-contract.md) for supported customer
 configuration and outputs.
