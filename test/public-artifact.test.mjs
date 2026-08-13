@@ -184,6 +184,41 @@ test('records a structured CLI failure without requiring publication', () => {
   assert.equal(artifact.publication, null);
 });
 
+test('retains a safe no-match result and requested configuration', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'skipped',
+      reason: 'no-matching-lenses',
+      diagnostics: { durationMs: 18, sourceDiff: 'do-not-publish' },
+      configuration: {
+        profile: 'cli-profile',
+        model: 'cli-model',
+        prompt: 'do-not-publish',
+      },
+    },
+    requestedConfiguration: {
+      profile: 'requested-profile',
+      model: 'requested-model',
+      effort: 'high',
+    },
+    requestedLenses: '["apps/backend/**"]',
+  });
+
+  assert.deepEqual(artifact, {
+    schemaVersion: 1,
+    status: 'skipped',
+    reason: 'no-matching-lenses',
+    diagnostics: { durationMs: 18 },
+    configuration: {
+      profile: 'cli-profile',
+      model: 'cli-model',
+      lenses: ['apps/backend/**'],
+    },
+    publication: null,
+  });
+  assert.doesNotMatch(JSON.stringify(artifact), /do-not-publish/);
+});
+
 test('records a failure when the result file is missing', async () => {
   const { written } = await writeArtifactFrom(undefined);
 

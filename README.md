@@ -179,6 +179,11 @@ input, which is the same input any event without pull-request context uses.
 Advisory mode is the default. It publishes a `COMMENT` review and succeeds for
 every valid review outcome, including outcomes with findings.
 
+When no configured lens matches the changed files, the Action succeeds without
+publishing a review or failure notice. It reports `skipped-no-matching-lenses`,
+retains the safe result artifact, and concludes the check neutral in both modes;
+this is not an approval or pass verdict.
+
 Gate mode connects the review outcome to the check result:
 
 - An approved review attempts to approve the pull request and succeeds.
@@ -219,6 +224,7 @@ Conclusions:
 | Repository settings blocked the review event | failure | not reachable |
 | Review verdict missing | failure | not reachable |
 | Superseded by a newer commit | neutral | neutral |
+| No matching review lenses | neutral | neutral |
 
 Advisory mode never concludes failure, so requiring the check while running
 advisory cannot turn advisory into a gate. What the advisory check tells you is

@@ -7,6 +7,8 @@ import {
   lensMetadata,
   findingIdFromBody,
   findingMarker,
+  isNoMatchingLensesResult,
+  NO_MATCHING_LENSES_REASON,
   planConversationReplies,
   readOutcome,
   reconciliationMarker,
@@ -59,6 +61,25 @@ test('canonical and earlier finding markers round-trip', () => {
   assert.equal(
     findingIdFromBody('text <!-- tessl-finding:earlier-id -->'),
     'earlier-id',
+  );
+});
+
+test('recognizes the successful no-match result as non-publishable', () => {
+  assert.equal(NO_MATCHING_LENSES_REASON, 'no-matching-lenses');
+  assert.equal(
+    isNoMatchingLensesResult({
+      status: 'skipped',
+      reason: NO_MATCHING_LENSES_REASON,
+    }),
+    true,
+  );
+  assert.equal(
+    isNoMatchingLensesResult({
+      status: 'ok',
+      reason: NO_MATCHING_LENSES_REASON,
+      outcome: {},
+    }),
+    false,
   );
 });
 

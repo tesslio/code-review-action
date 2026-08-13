@@ -1,3 +1,5 @@
+import { isNoMatchingLensesResult } from './protocol.mjs';
+
 export function reviewConclusion({
   mode,
   reviewExitCode,
@@ -10,6 +12,9 @@ export function reviewConclusion({
   }
   if (reviewExitCode !== '0') {
     return { status: 'technical-failure', exitCode: 1 };
+  }
+  if (isNoMatchingLensesResult(result)) {
+    return { status: 'skipped-no-matching-lenses', exitCode: 0 };
   }
   // Only a boolean verdict decides a gate. An absent verdict, or a value such
   // as the string "false" that a truthiness test would accept, establishes

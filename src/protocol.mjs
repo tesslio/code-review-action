@@ -52,6 +52,18 @@ const RECONCILIATION_CATEGORIES = {
 
 const UNRECOGNISED_CATEGORY = 'unrecognised';
 
+export const NO_MATCHING_LENSES_REASON = 'no-matching-lenses';
+
+// This successful CLI result deliberately has no publishable outcome. Keep
+// the discriminator here beside the publication protocol so callers cannot
+// accidentally turn a valid no-op into a publication failure.
+export function isNoMatchingLensesResult(result) {
+  return (
+    result?.status === 'skipped' &&
+    result?.reason === NO_MATCHING_LENSES_REASON
+  );
+}
+
 // Own-property lookup only: a category named after something on
 // `Object.prototype` must read as unknown, not as an inherited member.
 function knownCategory(category) {

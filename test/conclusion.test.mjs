@@ -90,6 +90,26 @@ test('advisory still succeeds when the outcome carries no verdict', () => {
   });
 });
 
+test('a successful no-match result is neutral and does not require publication', () => {
+  for (const mode of ['advisory', 'gate']) {
+    assert.deepEqual(
+      reviewConclusion(
+        valid({
+          mode,
+          result: {
+            status: 'skipped',
+            reason: 'no-matching-lenses',
+            diagnostics: { durationMs: 12 },
+          },
+          publishExitCode: '',
+          publication: undefined,
+        }),
+      ),
+      { status: 'skipped-no-matching-lenses', exitCode: 0 },
+    );
+  }
+});
+
 test('a comment fallback fails distinctly from review findings', () => {
   assert.deepEqual(
     reviewConclusion(
