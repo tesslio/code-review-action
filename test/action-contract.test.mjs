@@ -27,6 +27,7 @@ test('exposes one product-level Action contract', () => {
     'lenses',
     'mode',
     'pr-number',
+    'cli-channel',
   ]);
 });
 
