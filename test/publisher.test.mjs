@@ -250,6 +250,12 @@ test('falls back to a summary-only review when GitHub rejects an inline line', a
     api.calls[0][1].body,
     /Additional findings outside changed lines/,
   );
+  // The body GitHub actually accepted must report the finding as unplaced: it
+  // was rendered into the body, not onto a thread.
+  assert.match(
+    api.calls[0][1].body,
+    /<!-- tessl-code-review:result:v1 approved=false findings-total=1 findings-unplaced=1 -->/,
+  );
 });
 
 test('keeps an advisory review successful when conversation cleanup fails', async () => {
@@ -588,4 +594,117 @@ test('replies to a user-participated earlier finding after publication', async (
     }),
   });
   assert.equal(api.calls.filter(([name]) => name === 'reply').length, 1);
+});
+
+test('a still-applying finding is published when its thread is gone', async () => {
+  const api = fakeApi({
+    files: async () => [
+      { filename: 'src/a.ts', patch: '@@ -1 +1 @@\n-old\n+new' },
+    ],
+    // The prior was rendered into an earlier review body, so no thread carries it.
+    reviewComments: async () => [],
+  });
+  await publishCodeReview({
+    api,
+    prNumber: 10,
+    expectedHeadSha: 'head',
+    attemptId: 'attempt',
+    result: result({
+      findings: [
+        {
+          id: 'finding-1',
+          title: 'Check this',
+          body: 'This line is unsafe.',
+          severity: 'major',
+          evidence: [],
+          lensRefs: [],
+          disposition: 'remaining',
+          location: { path: 'src/a.ts', line: 1, side: 'RIGHT' },
+        },
+      ],
+      reconciliation: [
+        {
+          category: 'remaining',
+          findingId: 'finding-1',
+          priorFindingId: 'prior-1',
+        },
+      ],
+    }),
+  });
+  const [, payload] = api.calls.find(([name]) => name === 'createReview');
+  // It needs somewhere to be answered, so it gets a thread of its own.
+  assert.equal(payload.comments.length, 1);
+  assert.doesNotMatch(payload.body, /Discussion continues on the existing/);
+  assert.match(
+    payload.body,
+    /<!-- tessl-code-review:result:v1 approved=false findings-total=1 findings-unplaced=0 -->/,
+  );
+});
+
+test('unreadable threads warn and publish the review as reported', async () => {
+  const warnings = [];
+  const api = fakeApi({
+    files: async () => [
+      { filename: 'src/a.ts', patch: '@@ -1 +1 @@\n-old\n+new' },
+    ],
+    reviewComments: async () => {
+      throw new Error('secondary API unavailable');
+    },
+  });
+  const published = await publishCodeReview({
+    api,
+    prNumber: 10,
+    expectedHeadSha: 'head',
+    attemptId: 'attempt',
+    log: { warn: (message) => warnings.push(message) },
+    result: result({
+      findings: [
+        {
+          id: 'finding-1',
+          title: 'Check this',
+          body: 'This line is unsafe.',
+          severity: 'major',
+          evidence: [],
+          lensRefs: [],
+          disposition: 'remaining',
+          location: { path: 'src/a.ts', line: 1, side: 'RIGHT' },
+        },
+      ],
+      reconciliation: [
+        {
+          category: 'remaining',
+          findingId: 'finding-1',
+          priorFindingId: 'prior-1',
+        },
+      ],
+    }),
+  });
+  assert.equal(published.status, 'published');
+  const [, payload] = api.calls.find(([name]) => name === 'createReview');
+  // Unknown is not absent: the reported disposition stands, so no second root
+  // comment is opened on a thread that may well exist.
+  assert.equal(payload.comments.length, 0);
+  assert.match(payload.body, /Discussion continues on the existing/);
+  assert.ok(
+    warnings.some((message) => /could not read earlier review comment/.test(message)),
+  );
+});
+
+test('threads are not read when no finding could continue on one', async () => {
+  let reads = 0;
+  const api = fakeApi({
+    reviewComments: async () => {
+      reads++;
+      return [];
+    },
+  });
+  await publishCodeReview({
+    api,
+    prNumber: 10,
+    expectedHeadSha: 'head',
+    attemptId: 'attempt',
+    result: result(),
+  });
+  // Once, for the post-publication replies — not again before the plan.
+  assert.equal(reads, 1);
 });
