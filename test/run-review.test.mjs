@@ -106,7 +106,7 @@ test('exposes only the fixed status for a successful no-match result', async () 
       },
     });
     const output = await readFile(outputs, 'utf8');
-    assert.match(output, /result-status=skipped/);
+    assert.match(output, /^result-status=skipped$/m);
     assert.doesNotMatch(output, /contains reviewed content/);
   } finally {
     await rm(directory, { recursive: true, force: true });

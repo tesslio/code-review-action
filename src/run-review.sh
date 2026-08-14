@@ -39,10 +39,9 @@ set -e
 
 echo "exit-code=$code" >> "$GITHUB_OUTPUT"
 
-# A successful no-match result is a terminal, non-publishable result. Expose
-# only the small, fixed status vocabulary used by the Action condition; never
-# copy the CLI's reason or any reviewed content into GITHUB_OUTPUT.
-if [[ "$code" == "0" ]] && result_status="$(jq -r 'if type == "object" and (.status | type == "string") and (.status != "skipped" or .reason == "no-matching-lenses") then .status else empty end' "$result_path" 2>/dev/null)" && [[ "$result_status" =~ ^(ok|skipped|failed)$ ]]; then
-  echo "result-status=$result_status" >> "$GITHUB_OUTPUT"
+# A successful no-match result is terminal and non-publishable. Expose only
+# that fixed state; never copy the CLI's reason or reviewed content into output.
+if [[ "$code" == "0" ]] && jq -e '.status? == "skipped" and .reason? == "no-matching-lenses"' "$result_path" >/dev/null 2>&1; then
+  echo "result-status=skipped" >> "$GITHUB_OUTPUT"
 fi
 exit 0

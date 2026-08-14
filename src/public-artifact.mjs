@@ -1,5 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
+import { isNoMatchingLensesResult } from './protocol.mjs';
+
 function selectedLenses(requestedLenses) {
   if (!requestedLenses) return undefined;
   const parsed = JSON.parse(requestedLenses);
@@ -48,7 +50,6 @@ const RECONCILIATION_FIELDS = [
   'priorFindingId',
 ];
 const FAILURE_FIELDS = ['kind', 'message'];
-const DIAGNOSTIC_FIELDS = ['durationMs'];
 const CONFIGURATION_FIELDS = ['profile', 'model', 'effort'];
 
 function pick(source, fields) {
@@ -98,11 +99,18 @@ function publicOutcome(outcome) {
 }
 
 function publicDiagnostics(diagnostics) {
-  return pick(diagnostics, DIAGNOSTIC_FIELDS);
+  return typeof diagnostics?.durationMs === 'number'
+    ? { durationMs: diagnostics.durationMs }
+    : {};
 }
 
 function publicConfiguration(configuration, lenses) {
-  const picked = pick(configuration, CONFIGURATION_FIELDS);
+  const picked = {};
+  for (const field of CONFIGURATION_FIELDS) {
+    if (typeof configuration?.[field] === 'string' && configuration[field] !== '') {
+      picked[field] = configuration[field];
+    }
+  }
   return {
     ...picked,
     ...(lenses === undefined ? {} : { lenses }),
@@ -119,10 +127,7 @@ export function buildPublicArtifact({
   const lenses = selectedLenses(requestedLenses);
   const configuration =
     outcome === undefined
-      ? publicConfiguration(
-          result?.configuration ?? result?.config ?? requestedConfiguration,
-          lenses,
-        )
+      ? publicConfiguration(requestedConfiguration, lenses)
       : publicConfiguration(
           {
             profile: outcome.profileName,
@@ -134,8 +139,8 @@ export function buildPublicArtifact({
   return {
     schemaVersion: 1,
     status: result?.status ?? 'failed',
-    ...(result?.reason === 'no-matching-lenses'
-      ? { reason: 'no-matching-lenses' }
+    ...(isNoMatchingLensesResult(result)
+      ? { reason: result.reason }
       : {}),
     ...(outcome === undefined ? {} : { outcome: publicOutcome(outcome) }),
     ...(result?.failure === undefined

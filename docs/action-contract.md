@@ -125,7 +125,8 @@ If no configured lens matches any changed file, the CLI returns a successful
 `skipped` result with reason `no-matching-lenses`. The Action publishes no pull
 request review or failure notice, retains the status, reason, diagnostics, and
 available configuration in the public artifact, concludes the check `neutral`
-in both modes, and succeeds the job. This is not an approval or pass verdict.
+in both modes, and succeeds the job. This is not an approval or pass verdict;
+in gate mode, the required check does not block the pull request from merging.
 
 In gate mode, an approved result attempts `APPROVE`. A result that requires
 changes attempts `REQUEST_CHANGES` and then fails the check. If repository
