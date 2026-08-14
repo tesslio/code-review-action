@@ -250,6 +250,12 @@ test('falls back to a summary-only review when GitHub rejects an inline line', a
     api.calls[0][1].body,
     /Additional findings outside changed lines/,
   );
+  // The body GitHub actually accepted must report the finding as unplaced: it
+  // was rendered into the body, not onto a thread.
+  assert.match(
+    api.calls[0][1].body,
+    /<!-- tessl-code-review:result:v1 approved=false findings-total=1 findings-unplaced=1 -->/,
+  );
 });
 
 test('keeps an advisory review successful when conversation cleanup fails', async () => {
