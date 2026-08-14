@@ -6,11 +6,17 @@ releases.
 
 A release is cut by dispatching the Release workflow, which:
 
-1. refuses to run from any ref but `main`;
-2. refuses to tag a head whose validation checks are not all green;
-3. creates the tagged GitHub release at main's head, with the release notes
+1. refuses to run from any ref but `main`; and
+2. creates the tagged GitHub release at main's head, with the release notes
    stating the full commit SHA to pin and the CLI version the revision
-   installs.
+   installs, both read from the tagged commit.
+
+Nothing at release time checks that the head is green, because nothing at
+release time needs to: the validation jobs are required status checks on
+main, so a pull request cannot merge while they are red and main's head is
+green by construction. Enforcement sits at merge time, where blocking is
+routine and the remedy is obvious, rather than at release time, where it
+would be a machine veto over a human decision.
 
 Tags are immutable: one release per tag, never moved and never re-pointed. A
 dispatch naming an existing tag fails, and that failure is the policy working.

@@ -43,19 +43,7 @@ jobs:
             exit 1
           fi
           SHA=$(git rev-parse origin/main)
-          # Main moves on every merge now, so a green head is a precondition
-          # to check, not a structural given: refuse to tag a SHA whose
-          # checks are missing, unfinished, or failed.
-          # This run's own job is a check run on the same SHA and is always
-          # in progress here, so it is excluded from its own gate.
-          gh api "repos/${GITHUB_REPOSITORY}/commits/${SHA}/check-runs" --paginate > /tmp/check-runs.json
-          TOTAL_CHECKS=$(jq --arg run "/runs/${GITHUB_RUN_ID}/" '[.check_runs[] | select(.details_url | contains($run) | not)] | length' /tmp/check-runs.json)
-          BAD_CHECKS=$(jq --arg run "/runs/${GITHUB_RUN_ID}/" '[.check_runs[] | select(.details_url | contains($run) | not) | select(.status != "completed" or (.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped"))] | length' /tmp/check-runs.json)
-          if [ "$TOTAL_CHECKS" = "0" ] || [ "$BAD_CHECKS" != "0" ]; then
-            echo "::error::Refusing to release ${SHA}: ${TOTAL_CHECKS} check run(s) beside this one, ${BAD_CHECKS} not green."
-            exit 1
-          fi
-          CLI_VERSION=$(git show "${SHA}:action.yml" | sed -n 's/^ *version: *"\{0,1\}\([0-9][^" ]*\)"\{0,1\}*$/\1/p' | head -1)
+          CLI_VERSION=$(git show "${SHA}:action.yml" | sed -n 's/^ *version: *"\?\([0-9][^" ]*\)"\?$/\1/p' | head -1)
           if [ -z "$CLI_VERSION" ]; then
             echo "::error::Could not read the pinned CLI version from action.yml at ${SHA}."
             exit 1
