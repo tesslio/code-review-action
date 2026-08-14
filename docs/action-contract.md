@@ -59,6 +59,61 @@ the artifact does not carry.
 `publication` is the Action's own receipt rather than CLI output, and it is
 recorded as produced.
 
+## Comment protocol
+
+The published review body carries HTML comment markers. Most are internal: the
+Action uses them to find its own review, thread, and replies across runs. One is
+a supported contract for a consumer that reads the review over the GitHub API
+rather than from the run that produced it.
+
+```
+<!-- tessl-code-review:result:v1 approved=false findings-total=4 findings-unplaced=1 -->
+```
+
+| Field | Value |
+| --- | --- |
+| `approved` | Exactly `true` or `false`. The same `outcome.approved` the verdict heading is rendered from. |
+| `findings-total` | Every finding the review reports this round, including any continuing on a thread from an earlier round. |
+| `findings-unplaced` | How many of those no inline thread carries, for any reason. |
+
+Guarantees:
+
+- Exactly one `result:v1` marker per published review body. Model-authored text
+  reaches the same body, so the marker prefix is neutralized in every such
+  string before it is interpolated. A quoted marker is published as visible
+  text, not as a comment.
+- Present on every published review, including one that reports no findings. Its
+  presence on a head means a review was published for that head.
+- Counts are always stated. A zero is emitted as `0` and never omitted.
+- `findings-unplaced` is never greater than `findings-total`.
+- A finding continuing on a thread opened by an earlier round is carried, so it
+  is not unplaced. When GitHub rejects the inline locations and the findings are
+  rendered into the body instead, they are unplaced.
+
+Format:
+
+- Version lives in the key. A consumer matches `result:v1` and rejects an
+  unrecognised version without parsing it.
+- Bare space-separated `key=value` in kebab-case, as every marker in this
+  vocabulary is written. Values are never quoted, never empty, and never contain
+  whitespace or `>`.
+- Booleans and integers are written literally. A future string-valued field is
+  percent-encoded, as `lenses:v1` refs are, which puts `-->` out of reach inside
+  a value.
+- One line. Neither field order nor the marker's position within the body is
+  contract.
+- Fields may be added under `v1`. Removing a field, or changing what one means,
+  bumps the version.
+
+A run that fails before publishing a review publishes no review, so no
+`result:v1` marker. It posts a pull-request comment carrying
+`tessl-code-review:failure:v1` instead, and the Action reports the failure
+through the check run and the job conclusion.
+
+Every other marker — `run:v1`, `workflow-run:v1`, `failure:v1`, `lenses:v1`,
+`finding:v1`, `reconciliation:v1` — is internal and may change without a version
+bump.
+
 ## Review modes
 
 In advisory mode, a valid result publishes a `COMMENT` review and findings do

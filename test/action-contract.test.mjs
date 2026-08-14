@@ -104,6 +104,40 @@ test('documents the artifact field allowlist it enforces', () => {
   assert.match(contract, /`outcome.findings\[\].location`/);
 });
 
+test('documents the result marker a consumer is entitled to rely on', () => {
+  assert.match(contract, /## Comment protocol/);
+  // The documented example must be the grammar the Action emits: bare
+  // space-separated key=value, nothing quoted.
+  const example = contract.match(
+    /<!-- tessl-code-review:result:v1 [^\n]*-->/,
+  )?.[0];
+  assert.ok(example, 'the contract must show the marker it promises');
+  assert.doesNotMatch(example, /"/);
+  const documented = [...example.matchAll(/([a-z][a-z0-9-]*)=([^\s>]+)/g)].map(
+    ([, field]) => field,
+  );
+  assert.deepEqual(documented, [
+    'approved',
+    'findings-total',
+    'findings-unplaced',
+  ]);
+  // The internal markers stay internal: naming them as unsupported is what lets
+  // them change.
+  for (const marker of [
+    'run:v1',
+    'workflow-run:v1',
+    'failure:v1',
+    'lenses:v1',
+    'finding:v1',
+    'reconciliation:v1',
+  ]) {
+    assert.ok(
+      contract.includes(`\`${marker}\``),
+      `the contract must classify ${marker}`,
+    );
+  }
+});
+
 test('shows a copyable workflow for each supported trigger', () => {
   assert.match(readme, /on:\n  issue_comment:\n    types: \[created\]/);
   assert.match(readme, /author_association/);
