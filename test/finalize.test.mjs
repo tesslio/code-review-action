@@ -121,6 +121,24 @@ test('a superseded run explains itself in the run and the check', async () => {
   assert.match(requests, /reviews the newer commit/);
 });
 
+test('a no-match result succeeds without publishing or asserting a verdict', async () => {
+  const { exitCode, outputs, requests } = await finalize({
+    mode: 'gate',
+    checkRunId: '987654',
+    result: JSON.stringify({
+      status: 'skipped',
+      reason: 'no-matching-lenses',
+      diagnostics: { durationMs: 12 },
+    }),
+    publication: undefined,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(outputs, /status=skipped-no-matching-lenses/);
+  assert.match(requests, /"conclusion":"neutral"/);
+  assert.doesNotMatch(requests, /"conclusion":"success"/);
+});
+
 test('concludes the check run when the step output cannot be written', async () => {
   const { exitCode, requests } = await finalize({
     checkRunId: '987654',

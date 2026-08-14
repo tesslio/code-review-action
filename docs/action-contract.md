@@ -23,9 +23,9 @@ The supported entry point is `action.yml`.
 | `publication-path` | Publication receipt for later steps in the same job. |
 | `result-artifact` | Name of the uploaded result artifact. |
 
-The uploaded artifact contains the review outcome, selected configuration,
-duration, and publication receipt. It does not include credentials, source
-contents, prompts, or debug output.
+The uploaded artifact contains the review outcome, terminal status and reason,
+selected configuration, duration, and publication receipt. It does not include
+credentials, source contents, prompts, or debug output.
 
 The outcome uses `approved` for the overall decision and `requiresChanges` for
 each finding's effect on that decision.
@@ -38,7 +38,7 @@ is added to the allowlist and to this table.
 
 | Path | Fields |
 | --- | --- |
-| root | `schemaVersion`, `status`, `outcome`, `failure`, `diagnostics`, `configuration`, `publication` |
+| root | `schemaVersion`, `status`, `reason`, `outcome`, `failure`, `diagnostics`, `configuration`, `publication` |
 | `outcome` | `schemaVersion`, `runId`, `profileName`, `model`, `effort`, `judgement`, `approved`, `subject`, `findings`, `reconciliation` |
 | `outcome.subject` | `schemaVersion`, `repository`, `change` |
 | `outcome.subject.change` | `baseRevision`, `headRevision`, `headKind` |
@@ -121,6 +121,13 @@ bump.
 In advisory mode, a valid result publishes a `COMMENT` review and findings do
 not fail the job.
 
+If no configured lens matches any changed file, the CLI returns a successful
+`skipped` result with reason `no-matching-lenses`. The Action publishes no pull
+request review or failure notice, retains the status, reason, diagnostics, and
+available configuration in the public artifact, concludes the check `neutral`
+in both modes, and succeeds the job. This is not an approval or pass verdict;
+in gate mode, the required check does not block the pull request from merging.
+
 In gate mode, an approved result attempts `APPROVE`. A result that requires
 changes attempts `REQUEST_CHANGES` and then fails the check. If repository
 settings do not allow the requested review event, the Action publishes the
@@ -160,6 +167,7 @@ with the terminal status:
 | `gate-configuration-failure` | failure | not reachable, neutral |
 | `gate-verdict-failure` | failure | not reachable, neutral |
 | `superseded` | neutral | neutral |
+| `skipped-no-matching-lenses` | neutral | neutral |
 
 Advisory mode never concludes failure, so requiring the check cannot turn
 advisory mode into a gate. Breakage still reaches maintainers as a failed job

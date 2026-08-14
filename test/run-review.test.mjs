@@ -72,3 +72,76 @@ test('forwards supplied model and effort overrides', async () => {
     ],
   );
 });
+
+test('exposes only the fixed status for a successful no-match result', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
+  const executable = join(directory, 'tessl');
+  const outputs = join(directory, 'outputs');
+  await writeFile(
+    executable,
+    '#!/usr/bin/env bash\nprintf \'%s\\n\' "$RESULT_JSON"\n',
+  );
+  await chmod(executable, 0o755);
+
+  try {
+    await run('bash', [script], {
+      env: {
+        ...process.env,
+        PATH: `${directory}${delimiter}${process.env.PATH}`,
+        RUNNER_TEMP: directory,
+        GITHUB_OUTPUT: outputs,
+        HEAD_SHA: 'b'.repeat(40),
+        PR_NUMBER: '42',
+        PROFILE: 'standard',
+        MODEL: '',
+        EFFORT: '',
+        LENSES: '',
+        RESULT_JSON: JSON.stringify({
+          status: 'skipped',
+          reason: 'no-matching-lenses',
+          diagnostics: {
+            note: 'contains reviewed content that must not enter outputs',
+          },
+        }),
+      },
+    });
+    const output = await readFile(outputs, 'utf8');
+    assert.match(output, /^result-status=skipped$/m);
+    assert.doesNotMatch(output, /contains reviewed content/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('does not expose skipped routing when the CLI exits nonzero', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
+  const executable = join(directory, 'tessl');
+  const outputs = join(directory, 'outputs');
+  await writeFile(
+    executable,
+    '#!/usr/bin/env bash\nprintf \'{"status":"skipped","reason":"no-matching-lenses"}\\n\'\nexit 7\n',
+  );
+  await chmod(executable, 0o755);
+
+  try {
+    await run('bash', [script], {
+      env: {
+        ...process.env,
+        PATH: `${directory}${delimiter}${process.env.PATH}`,
+        RUNNER_TEMP: directory,
+        GITHUB_OUTPUT: outputs,
+        HEAD_SHA: 'c'.repeat(40),
+        PR_NUMBER: '42',
+        PROFILE: 'standard',
+        MODEL: '',
+        EFFORT: '',
+        LENSES: '',
+      },
+    });
+    const output = await readFile(outputs, 'utf8');
+    assert.match(output, /exit-code=7/);
+    assert.doesNotMatch(output, /result-status=skipped/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

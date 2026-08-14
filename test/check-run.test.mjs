@@ -104,6 +104,18 @@ test('a superseded run asserts no verdict in either mode', () => {
   }
 });
 
+test('a no-match run is neutral and never reports approval', () => {
+  for (const mode of ['advisory', 'gate']) {
+    const report = checkRunReport({
+      mode,
+      status: 'skipped-no-matching-lenses',
+    });
+    assert.equal(report.conclusion, 'neutral');
+    assert.match(report.title, /No matching review lenses/);
+    assert.match(report.summary, /no review assertion/);
+  }
+});
+
 test('an unrecognized status concludes without a verdict', () => {
   assert.deepEqual(checkRunReport({ mode: 'gate', status: 'invented' }), {
     conclusion: 'neutral',

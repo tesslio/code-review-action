@@ -38,4 +38,10 @@ code="$?"
 set -e
 
 echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+# A successful no-match result is terminal and non-publishable. Expose only
+# that fixed state; never copy the CLI's reason or reviewed content into output.
+if [[ "$code" == "0" ]] && jq -e '.status? == "skipped" and .reason? == "no-matching-lenses"' "$result_path" >/dev/null 2>&1; then
+  echo "result-status=skipped" >> "$GITHUB_OUTPUT"
+fi
 exit 0

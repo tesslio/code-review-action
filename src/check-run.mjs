@@ -68,6 +68,13 @@ const REPORTS = {
     summary:
       'A newer commit was pushed to this pull request while the review was running, so no review was published for this commit and it carries no review verdict. The workflow run is marked failed to keep an unpublished review from reading as a pass. Nothing needs fixing: a run against the current head reviews the newer commit.',
   },
+  'skipped-no-matching-lenses': {
+    gate: 'neutral',
+    advisory: 'neutral',
+    title: 'No matching review lenses',
+    summary:
+      'No configured review lenses matched the files changed in this commit, so Tessl Code Review made no review assertion.',
+  },
 };
 
 const UNRECOGNIZED_REPORT = {

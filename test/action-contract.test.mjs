@@ -95,6 +95,19 @@ test('documents approval as the public success status', () => {
   assert.match(contract, /`requiresChanges`/);
 });
 
+test('bypasses publication and failure notices for a no-match result', () => {
+  assert.match(
+    action,
+    /steps\.review\.outputs\['exit-code'\] == '0' && steps\.review\.outputs\['result-status'\] != 'skipped'/,
+  );
+  assert.match(
+    action,
+    /steps\.review\.outputs\['exit-code'\] != '0' \|\| \(steps\.review\.outputs\['result-status'\] != 'skipped' && steps\.publish\.outputs\['exit-code'\] != '0'\)/,
+  );
+  assert.match(contract, /`skipped-no-matching-lenses`/);
+  assert.match(contract, /`no-matching-lenses`/);
+});
+
 test('documents the fail-closed gate and the superseded outcome', () => {
   assert.match(contract, /\| `gate-verdict-failure` \| failure \|/);
   assert.match(contract, /Gate mode fails closed/);

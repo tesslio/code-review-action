@@ -156,7 +156,7 @@ runs:
 
     - name: Publish review
       id: publish
-      if: steps.review.outputs['exit-code'] == '0'
+      if: steps.review.outputs['exit-code'] == '0' && steps.review.outputs['result-status'] != 'skipped'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -182,6 +182,9 @@ runs:
         PUBLISH_OUTPUT: ${{ steps.review.outputs['publication-path'] }}
         PUBLIC_ARTIFACT_OUTPUT: ${{ steps.review.outputs['artifact-path'] }}
         LENSES: ${{ inputs.lenses }}
+        PROFILE: ${{ inputs.profile }}
+        MODEL: ${{ inputs.model }}
+        EFFORT: ${{ inputs.effort }}
       run: node "$GITHUB_ACTION_PATH/src/build-public-artifact.mjs"
 
     - name: Upload public result
@@ -193,7 +196,7 @@ runs:
         if-no-files-found: warn
 
     - name: Publish visible technical failure
-      if: always() && (steps.review.outputs['exit-code'] != '0' || steps.publish.outputs['exit-code'] != '0')
+      if: always() && (steps.review.outputs['exit-code'] != '0' || (steps.review.outputs['result-status'] != 'skipped' && steps.publish.outputs['exit-code'] != '0'))
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}

@@ -5,6 +5,7 @@ import { writeFile } from 'node:fs/promises';
 import { requiredEnv, requiredPositiveIntegerEnv } from './env.mjs';
 import { GitHubCodeReviewApi } from './github-api.mjs';
 import { publishCodeReview } from './publisher.mjs';
+import { isNoMatchingLensesResult } from './protocol.mjs';
 import { ResultFileError, readReviewResult } from './result-file.mjs';
 
 const api = new GitHubCodeReviewApi({
@@ -23,6 +24,25 @@ try {
 const mode = requiredEnv('MODE');
 if (mode !== 'advisory' && mode !== 'gate') {
   throw new Error('MODE must be advisory or gate.');
+}
+if (isNoMatchingLensesResult(result)) {
+  const skipped = { schemaVersion: 1, status: 'skipped-no-matching-lenses' };
+  if (process.env.PUBLISH_OUTPUT) {
+    await writeFile(
+      process.env.PUBLISH_OUTPUT,
+      `${JSON.stringify(skipped, null, 2)}\n`,
+      'utf8',
+    );
+  }
+  if (process.env.GITHUB_OUTPUT) {
+    await writeFile(
+      process.env.GITHUB_OUTPUT,
+      'review-id=\npublication-status=skipped-no-matching-lenses\n',
+      { encoding: 'utf8', flag: 'a' },
+    );
+  }
+  console.log(JSON.stringify(skipped));
+  process.exit(0);
 }
 if (result.status !== 'ok' || !result.outcome) {
   throw new Error('The Code Review result does not contain a publishable outcome.');

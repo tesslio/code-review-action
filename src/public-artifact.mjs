@@ -1,5 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
+import { isNoMatchingLensesResult } from './protocol.mjs';
+
 function selectedLenses(requestedLenses) {
   if (!requestedLenses) return undefined;
   const parsed = JSON.parse(requestedLenses);
@@ -48,6 +50,7 @@ const RECONCILIATION_FIELDS = [
   'priorFindingId',
 ];
 const FAILURE_FIELDS = ['kind', 'message'];
+const CONFIGURATION_FIELDS = ['profile', 'model', 'effort'];
 
 function pick(source, fields) {
   const picked = {};
@@ -95,35 +98,56 @@ function publicOutcome(outcome) {
   };
 }
 
+function publicDiagnostics(diagnostics) {
+  return typeof diagnostics?.durationMs === 'number'
+    ? { durationMs: diagnostics.durationMs }
+    : {};
+}
+
+function publicConfiguration(configuration, lenses) {
+  const picked = {};
+  for (const field of CONFIGURATION_FIELDS) {
+    if (typeof configuration?.[field] === 'string' && configuration[field] !== '') {
+      picked[field] = configuration[field];
+    }
+  }
+  return {
+    ...picked,
+    ...(lenses === undefined ? {} : { lenses }),
+  };
+}
+
 export function buildPublicArtifact({
   result,
   publication,
   requestedLenses = '',
+  requestedConfiguration = {},
 }) {
   const outcome = result?.outcome;
   const lenses = selectedLenses(requestedLenses);
+  const configuration =
+    outcome === undefined
+      ? publicConfiguration(requestedConfiguration, lenses)
+      : publicConfiguration(
+          {
+            profile: outcome.profileName,
+            model: outcome.model,
+            effort: outcome.effort,
+          },
+          lenses,
+        );
   return {
     schemaVersion: 1,
     status: result?.status ?? 'failed',
+    ...(isNoMatchingLensesResult(result)
+      ? { reason: result.reason }
+      : {}),
     ...(outcome === undefined ? {} : { outcome: publicOutcome(outcome) }),
     ...(result?.failure === undefined
       ? {}
       : { failure: pick(result.failure, FAILURE_FIELDS) }),
-    diagnostics: {
-      ...(typeof result?.diagnostics?.durationMs === 'number'
-        ? { durationMs: result.diagnostics.durationMs }
-        : {}),
-    },
-    ...(outcome === undefined
-      ? {}
-      : {
-          configuration: {
-            profile: outcome.profileName,
-            model: outcome.model,
-            ...(outcome.effort === undefined ? {} : { effort: outcome.effort }),
-            ...(lenses === undefined ? {} : { lenses }),
-          },
-        }),
+    diagnostics: publicDiagnostics(result?.diagnostics),
+    ...(Object.keys(configuration).length === 0 ? {} : { configuration }),
     publication: publication ?? null,
   };
 }
@@ -149,11 +173,13 @@ export async function writePublicArtifact({
   publicationPath,
   artifactPath,
   requestedLenses,
+  requestedConfiguration,
 }) {
   const artifact = buildPublicArtifact({
     result: await readJsonIfPresent(resultPath),
     publication: await readJsonIfPresent(publicationPath),
     requestedLenses,
+    requestedConfiguration,
   });
   await writeFile(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
   return artifact;

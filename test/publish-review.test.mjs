@@ -42,6 +42,52 @@ async function publish({ result }) {
   }
 }
 
+test('a no-match result is a successful no-op without GitHub publication', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
+  const resultPath = join(directory, 'result.json');
+  const publicationPath = join(directory, 'publication.json');
+  const outputs = join(directory, 'outputs');
+  const requests = join(directory, 'requests');
+  await writeFile(
+    resultPath,
+    JSON.stringify({ status: 'skipped', reason: 'no-matching-lenses' }),
+    'utf8',
+  );
+  await writeFile(requests, '');
+  await writeFile(outputs, '');
+
+  try {
+    const completed = await run(process.execPath, ['--import', stub, script], {
+      env: {
+        PATH: process.env.PATH,
+        GH_TOKEN: 'token',
+        REPOSITORY: 'acme/widgets',
+        PR_NUMBER: '10',
+        HEAD_SHA: 'a'.repeat(40),
+        MODE: 'gate',
+        GITHUB_RUN_ID: 'workflow-1',
+        REVIEW_OUTPUT: resultPath,
+        PUBLISH_OUTPUT: publicationPath,
+        GITHUB_OUTPUT: outputs,
+        REQUEST_LOG: requests,
+      },
+    });
+
+    assert.equal(completed.code ?? 0, 0);
+    assert.equal((await readFile(requests, 'utf8')).trim(), '');
+    assert.deepEqual(JSON.parse(await readFile(publicationPath, 'utf8')), {
+      schemaVersion: 1,
+      status: 'skipped-no-matching-lenses',
+    });
+    assert.match(
+      await readFile(outputs, 'utf8'),
+      /publication-status=skipped-no-matching-lenses/,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('an empty result file fails as a result problem, not a publication one', async () => {
   const { exitCode, stdout, requests } = await publish({ result: '' });
 

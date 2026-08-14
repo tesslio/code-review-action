@@ -184,6 +184,71 @@ test('records a structured CLI failure without requiring publication', () => {
   assert.equal(artifact.publication, null);
 });
 
+test('retains a safe no-match result and only requested configuration', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'skipped',
+      reason: 'no-matching-lenses',
+      diagnostics: { durationMs: 18, sourceDiff: 'do-not-publish' },
+      configuration: {
+        profile: { lenses: [{ globs: ['apps/secret-service/**'] }] },
+        model: 'cli-model',
+        prompt: 'do-not-publish',
+      },
+    },
+    requestedConfiguration: {
+      profile: 'requested-profile',
+      model: 'requested-model',
+      effort: 'high',
+    },
+    requestedLenses: '["apps/backend/**"]',
+  });
+
+  assert.deepEqual(artifact, {
+    schemaVersion: 1,
+    status: 'skipped',
+    reason: 'no-matching-lenses',
+    diagnostics: { durationMs: 18 },
+    configuration: {
+      profile: 'requested-profile',
+      model: 'requested-model',
+      effort: 'high',
+      lenses: ['apps/backend/**'],
+    },
+    publication: null,
+  });
+  assert.doesNotMatch(JSON.stringify(artifact), /do-not-publish/);
+  assert.doesNotMatch(JSON.stringify(artifact), /secret-service|cli-model/);
+});
+
+test('drops malformed diagnostics and empty requested overrides', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'skipped',
+      reason: 'no-matching-lenses',
+      diagnostics: { durationMs: { nested: 'do-not-publish' } },
+    },
+    requestedConfiguration: {
+      profile: 'standard',
+      model: '',
+      effort: '',
+    },
+  });
+
+  assert.deepEqual(artifact.diagnostics, {});
+  assert.deepEqual(artifact.configuration, { profile: 'standard' });
+  assert.doesNotMatch(JSON.stringify(artifact), /do-not-publish/);
+});
+
+test('publishes the no-match reason only for the complete skipped discriminator', () => {
+  const artifact = buildPublicArtifact({
+    result: { status: 'failed', reason: 'no-matching-lenses' },
+  });
+
+  assert.equal(artifact.status, 'failed');
+  assert.equal(Object.hasOwn(artifact, 'reason'), false);
+});
+
 test('records a failure when the result file is missing', async () => {
   const { written } = await writeArtifactFrom(undefined);
 
