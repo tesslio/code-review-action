@@ -1,8 +1,9 @@
 name: Release
 
-# Cuts a release: fast-forwards the `release` branch to main's head, then
-# creates the tagged GitHub release with the commit SHA in the notes. Running
-# this workflow is the human release decision; nothing here runs on its own.
+# Cuts a release: creates the tagged GitHub release at main's head with the
+# commit SHA in the notes. Running this workflow is the human release
+# decision; nothing here runs on its own. There is no release branch - the
+# released state is the newest release tag.
 #
 # The Marketplace listing is not updated by this workflow: making the new
 # release the Marketplace-listed version is a checkbox on the release page,
@@ -26,20 +27,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          persist-credentials: true
-
-      - name: Fast-forward release to main
-        run: |
-          set -euo pipefail
-          git fetch origin main release
-          # `release` only ever moves by fast-forward, so shared history is an
-          # invariant, not a hope. A non-ancestor release branch means someone
-          # moved it by hand; stop and let a human look.
-          if ! git merge-base --is-ancestor origin/release origin/main; then
-            echo "::error::The release branch is not an ancestor of main; refusing to move it."
-            exit 1
-          fi
-          git push origin origin/main:refs/heads/release
+          persist-credentials: false
 
       - name: Create the release
         env:
