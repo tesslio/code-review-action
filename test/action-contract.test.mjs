@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
+import { resultMarker } from '../src/protocol.mjs';
+
 const action = await readFile(new URL('../action.yml', import.meta.url), 'utf8');
 const contract = await readFile(
   new URL('../docs/action-contract.md', import.meta.url),
@@ -113,6 +115,9 @@ test('documents the result marker a consumer is entitled to rely on', () => {
   )?.[0];
   assert.ok(example, 'the contract must show the marker it promises');
   assert.doesNotMatch(example, /"/);
+  // Bound to the emitter, not to a second hardcoded field list: a change to the
+  // marker must fail here rather than leave the documented example stale.
+  assert.equal(example, resultMarker({ approved: false, total: 4, unplaced: 1 }));
   const documented = [...example.matchAll(/([a-z][a-z0-9-]*)=([^\s>]+)/g)].map(
     ([, field]) => field,
   );
