@@ -1,0 +1,66 @@
+name: Release
+
+# Cuts a release: fast-forwards the `release` branch to main's head, then
+# creates the tagged GitHub release with the commit SHA in the notes. Running
+# this workflow is the human release decision; nothing here runs on its own.
+#
+# The Marketplace listing is not updated by this workflow: making the new
+# release the Marketplace-listed version is a checkbox on the release page,
+# which has no API. The run summary links straight to it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create (for example v2)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Fast-forward release to main
+        run: |
+          set -euo pipefail
+          git fetch origin main release
+          # `release` only ever moves by fast-forward, so shared history is an
+          # invariant, not a hope. A non-ancestor release branch means someone
+          # moved it by hand; stop and let a human look.
+          if ! git merge-base --is-ancestor origin/release origin/main; then
+            echo "::error::The release branch is not an ancestor of main; refusing to move it."
+            exit 1
+          fi
+          git push origin origin/main:refs/heads/release
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          SHA=$(git rev-parse origin/main)
+          CLI_VERSION=$(sed -n 's/^ *version: *\([0-9][0-9.]*\)*$/\1/p' action.yml | head -1)
+          {
+            echo "Pin the Action to this release's commit SHA:"
+            echo
+            echo '```yaml'
+            echo "uses: tesslio/code-review-action@${SHA} # ${TAG}"
+            echo '```'
+            echo
+            echo "This revision installs Tessl CLI ${CLI_VERSION}."
+          } > /tmp/notes.md
+          gh release create "$TAG" --target "$SHA" --title "$TAG" --notes-file /tmp/notes.md
+          {
+            echo "### Release ${TAG} cut at ${SHA}"
+            echo "Marketplace listing update is manual: open the release, edit, tick the Marketplace checkbox, publish."
+            echo "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          } >> "$GITHUB_STEP_SUMMARY"
