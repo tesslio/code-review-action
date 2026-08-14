@@ -51,7 +51,9 @@ is added to the allowlist and to this table.
 
 `configuration.model` and `configuration.effort` record the resolved values the
 run used, normally the selected profile's. They are observability, not an input
-contract.
+contract. The `cli-channel` input is likewise internal: Tessl's own
+callers use it to exercise unreleased CLI builds, and it is not supported
+customer configuration.
 
 Finding evidence is deliberately absent: it can quote the reviewed source, which
 the artifact does not carry.

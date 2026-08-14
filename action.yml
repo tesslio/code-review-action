@@ -34,6 +34,14 @@ inputs:
     description: Pull-request number for events without pull-request context
     required: false
     default: ''
+  cli-channel:
+    # Internal. Switches the installed CLI to a release channel (head, nightly,
+    # beta) after install, replacing the pinned version for that run. Used by
+    # Tessl's own callers to exercise unreleased CLI builds; not part of the
+    # supported input contract, and unset callers get the pinned version.
+    description: Internal Tessl CLI release channel override; empty uses the pinned version
+    required: false
+    default: ''
 
 outputs:
   status:
@@ -114,6 +122,23 @@ runs:
       with:
         version: 0.96.0
         token: ${{ inputs['tessl-token'] }}
+
+    - name: Switch Tessl CLI release channel
+      if: inputs['cli-channel'] != ''
+      shell: bash
+      env:
+        TESSL_TOKEN: ${{ inputs['tessl-token'] }}
+        CLI_CHANNEL: ${{ inputs['cli-channel'] }}
+      run: |
+        set -euo pipefail
+        tessl cli update --channel "$CLI_CHANNEL"
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        {
+          echo '### Tessl Code Review CLI channel override'
+          echo '```text'
+          "$HOME/.local/bin/tessl" --version
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
 
     - name: Run Tessl Code Review
       id: review
