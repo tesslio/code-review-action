@@ -4,6 +4,7 @@ import {
   attemptMarker,
   buildFallbackBody,
   buildPublicationPlan,
+  mayContinueOnPriorThread,
   planConversationReplies,
   readOutcome,
   selectPriorReconciliation,
@@ -128,6 +129,21 @@ async function replyToPriorFindingThreads({
   }
 }
 
+// Read before publication so a still-applying finding is only published as
+// continuing when a thread actually carries it. A failure is not fatal: the plan
+// falls back to trusting the reported disposition, which is how it behaved before
+// it could check at all.
+async function priorReviewCommentsBestEffort({ api, prNumber, mode, log }) {
+  try {
+    return await api.reviewComments(prNumber);
+  } catch (error) {
+    log.warn(
+      `${publishedReviewLabel(mode)} could not read earlier review comment threads, so continuing findings are reported as the review described them: ${error}`,
+    );
+    return undefined;
+  }
+}
+
 async function removeFailureNoticesBestEffort({ api, prNumber, mode, log }) {
   try {
     await removeFailureNotices({ api, prNumber });
@@ -199,7 +215,19 @@ export async function publishCodeReview({
   )
     ? await api.files(prNumber)
     : [];
-  const plan = buildPublicationPlan({ outcome, files, attemptId });
+  // Read only when this outcome could continue a finding on an earlier thread,
+  // the same way the diff is read only when a finding could be placed on it.
+  // `undefined` records that the threads are unknown rather than absent, so a
+  // failure here costs accounting accuracy and never duplicates a comment.
+  const reviewComments = mayContinueOnPriorThread(outcome)
+    ? await priorReviewCommentsBestEffort({ api, prNumber, mode, log })
+    : undefined;
+  const plan = buildPublicationPlan({
+    outcome,
+    files,
+    attemptId,
+    reviewComments,
+  });
   let inline = plan.inline;
   let usedFallback = false;
   let policyFallback = false;

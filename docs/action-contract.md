@@ -95,8 +95,8 @@ Format:
 - Version lives in the key. A consumer matches `result:v1` and rejects an
   unrecognised version without parsing it.
 - Bare space-separated `key=value` in kebab-case, as every marker in this
-  vocabulary is written. Values are never quoted, never empty, and never contain
-  whitespace or `>`.
+  vocabulary is written. A value is never quoted, never empty, and never contains
+  whitespace or `>`, so every field can be read with one pattern.
 - Booleans and integers are written literally. A future string-valued field is
   percent-encoded, as `lenses:v1` refs are, which puts `-->` out of reach inside
   a value.

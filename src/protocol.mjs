@@ -54,13 +54,19 @@ const UNRECOGNISED_CATEGORY = 'unrecognised';
 
 // Reduces an arbitrary value to a bounded, inert slug so it can be
 // interpolated into a published comment body or marker.
+//
+// A disallowed run becomes `-` rather than a space: this slug reaches a marker
+// value, and every value in this vocabulary is read back with a pattern that
+// stops at whitespace. A space would leave the rest of the value trailing
+// outside the field that carries it, in exactly the unrecognised-value case the
+// slug exists to survive.
 function normalizeSlug(value, fallback) {
   if (typeof value !== 'string') return fallback;
   const slug = value
     .toLowerCase()
-    .replace(/[^a-z0-9-]+/g, ' ')
-    .trim()
-    .slice(0, 32);
+    .replace(/[^a-z0-9-]+/g, '-')
+    .slice(0, 32)
+    .replace(/^-+|-+$/g, '');
   return slug.length > 0 ? slug : fallback;
 }
 
@@ -104,6 +110,11 @@ function countKey(category) {
   return knownCategory(category) ? category : normalizeCategory(category);
 }
 
+// Interpolated as supplied. `readOutcome` has already rejected an identifier
+// carrying whitespace or `>`, which is what a marker needs to be safe, and an
+// identifier has one representation on both sides of this boundary: the CLI
+// captures this token verbatim and reports it back unchanged, so encoding it
+// here would encode what is already published.
 export function findingMarker(id) {
   return `<!-- tessl-code-review:finding:v1 id=${id} -->`;
 }
@@ -154,7 +165,9 @@ export function reconciliationMarker(priorFindingId, category) {
   // Records on the thread which disposition a reply carries. Known categories
   // are already slugs and pass through unchanged; normalizing keeps an unknown
   // or missing one from interpolating raw into the marker, which is part of the
-  // published comment body.
+  // published comment body. The identifier needs no such treatment: it is
+  // shape-checked when the outcome is read, and it is already the token this
+  // Action published.
   return `<!-- tessl-code-review:reconciliation:v1 id=${priorFindingId} category=${normalizeCategory(category)} -->`;
 }
 
@@ -162,6 +175,35 @@ function assertString(value, label) {
   if (typeof value !== 'string' || value.length === 0) {
     throw new Error(`Code Review result is missing ${label}.`);
   }
+}
+
+// An identifier is interpolated into a marker, and a marker is part of a
+// published comment body, so an identifier carrying whitespace or `>` could
+// close its own comment and open another — including a second `result:v1`,
+// which one review body must never contain.
+//
+// Validating the shape here rather than encoding at each marker keeps the
+// identifier in exactly one representation. Encoding cannot: an identifier
+// reaches this Action already in its published form — the CLI preserves a
+// matched prior's token as the re-raised finding's `id`, and reports it again as
+// `priorFindingId` — so encoding on the way out would re-encode what is already
+// encoded and drift one layer per round.
+//
+// The bound is also what the CLI can produce: a derived id is hex, and a
+// preserved one was captured from a marker by a pattern that excludes exactly
+// these characters. So this rejects nothing the system can currently mint.
+const UNSAFE_IDENTIFIER = /[\s>]/;
+
+function assertIdentifier(value, label) {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`Code Review ${label} must carry a non-empty id.`);
+  }
+  if (UNSAFE_IDENTIFIER.test(value)) {
+    throw new Error(
+      `Code Review ${label} has an id that cannot be published in a marker: ${JSON.stringify(value)}.`,
+    );
+  }
+  return value;
 }
 
 export function readOutcome(result) {
@@ -192,11 +234,36 @@ export function readOutcome(result) {
   if (!Array.isArray(outcome.reconciliation)) {
     throw new Error('Code Review result is missing outcome.reconciliation.');
   }
+  // Publication assumes a finding id identifies one finding: it keys the maps
+  // that link a finding to its reconciliation entry, it correlates a published
+  // inline comment back to the finding it came from, and it is what a later round
+  // matches a thread by. A duplicate does not fail any of those loudly — it
+  // silently collapses one finding into another, or pairs a title with another
+  // finding's location. Reject it here instead, where the outcome is read.
+  const ids = new Set();
   for (let i = 0; i < outcome.findings.length; i++) {
     if (typeof outcome.findings[i].requiresChanges !== 'boolean') {
       throw new Error(
         `Code Review finding at index ${i} must include boolean requiresChanges.`,
       );
+    }
+    const id = assertIdentifier(
+      outcome.findings[i].id,
+      `finding at index ${i}`,
+    );
+    if (ids.has(id)) {
+      throw new Error(`Code Review findings repeat the id ${id}.`);
+    }
+    ids.add(id);
+  }
+  for (let i = 0; i < outcome.reconciliation.length; i++) {
+    const entry = outcome.reconciliation[i];
+    const where = `reconciliation entry at index ${i}`;
+    if (entry.findingId !== undefined) {
+      assertIdentifier(entry.findingId, where);
+    }
+    if (entry.priorFindingId !== undefined) {
+      assertIdentifier(entry.priorFindingId, where);
     }
   }
   const computedApproved = !outcome.findings.some((f) => f.requiresChanges);
@@ -333,9 +400,10 @@ function renderUnplaced(finding) {
 }
 
 function findingListEntry(finding, note) {
-  const label = finding.severity
-    ? `**${severityLabel(finding.severity)}** · `
-    : '';
+  // Unconditional: `severityLabel` reports a missing severity as `Unspecified`,
+  // which is what the severity table and the inline comment header already show.
+  // Omitting the label here would describe the same finding two ways.
+  const label = `**${severityLabel(finding.severity)}** · `;
   const location = neutralizeMarkers(
     [finding.path, finding.line].filter(Boolean).join(':'),
   );
@@ -365,13 +433,67 @@ function findingsSection(placed, continuing) {
   ];
 }
 
-export function buildPublicationPlan({ outcome, files, attemptId }) {
+// True when this outcome could publish a finding as continuing on an earlier
+// thread, so the caller knows whether the threads are worth reading.
+export function mayContinueOnPriorThread(outcome) {
+  return (
+    (outcome.findings ?? []).some(
+      (finding) => finding.disposition === 'remaining',
+    ) ||
+    (outcome.reconciliation ?? []).some(
+      (entry) => entry.category === 'remaining',
+    )
+  );
+}
+
+// The identifiers of prior findings that still have a thread root to continue on.
+// Tokens as published, which is the form the CLI reports a prior finding id in.
+function priorThreadIds(reviewComments) {
+  return new Set(
+    groupReviewCommentThreads(reviewComments)
+      .map((thread) => findingIdFromBody(thread.root.body))
+      .filter((id) => id !== undefined),
+  );
+}
+
+// `reviewComments` is optional, and `undefined` is not the same as `[]`. It means
+// the threads could not be read, so the reported disposition is trusted as it was
+// before this Action could check — better than duplicating a comment onto a
+// thread that exists but was not seen. An empty array means there is genuinely
+// nothing to continue on.
+export function buildPublicationPlan({
+  outcome,
+  files,
+  attemptId,
+  reviewComments,
+}) {
   const priorReconciliation = selectPriorReconciliation(outcome.reconciliation);
   const priorByCurrentId = new Map(
     priorReconciliation
       .filter((entry) => entry.findingId)
       .map((entry) => [entry.findingId, entry]),
   );
+  // Every prior linked to a current finding, not just the last one: a composite
+  // may link several, and it continues on a thread if any of them still has one.
+  const priorIdsByCurrentId = new Map();
+  for (const entry of priorReconciliation) {
+    if (!entry.findingId || !entry.priorFindingId) continue;
+    const ids = priorIdsByCurrentId.get(entry.findingId) ?? [];
+    ids.push(entry.priorFindingId);
+    priorIdsByCurrentId.set(entry.findingId, ids);
+  }
+  const threadIds =
+    reviewComments === undefined ? undefined : priorThreadIds(reviewComments);
+  // A finding the CLI reports as still applying only continues silently when a
+  // thread actually carries it. The CLI reads a prior finding id out of either an
+  // inline comment or a review body, and a finding rendered into a review body
+  // never had a thread — so `remaining` alone does not mean "already visible".
+  const continuesOnThread = (finding) => {
+    if (threadIds === undefined) return true;
+    return (priorIdsByCurrentId.get(finding.id) ?? []).some((id) =>
+      threadIds.has(id),
+    );
+  };
 
   const candidates = [];
   const intrinsicallyUnplaced = [];
@@ -385,11 +507,15 @@ export function buildPublicationPlan({ outcome, files, attemptId }) {
     // order-dependent. An outcome that omits the finding disposition falls back
     // to the prior entry's category.
     const disposition = finding.disposition ?? prior?.category;
-    if (disposition === 'remaining') {
+    if (disposition === 'remaining' && continuesOnThread(finding)) {
       // Already carries an inline comment from an earlier round, so a second
       // root comment would split one concern across two threads. It is still
       // one of this outcome's findings, so it stays in the severity table and
       // the findings list, and its list entry says where the thread lives.
+      //
+      // A still-applying finding with no such thread falls through and is
+      // published like any other: it needs somewhere to be answered, and
+      // claiming a thread that does not exist leaves it unanswerable.
       continuing.push({
         title: finding.title,
         severity: finding.severity,
@@ -533,10 +659,15 @@ export function buildPublicationPlan({ outcome, files, attemptId }) {
   // unaffected by that failure, so they are listed in both bodies — and their
   // threads still carry them, so they stay placed in both markers. Everything
   // this round would have placed inline is unplaced in this body.
+  //
+  // Counted from the inline comments themselves rather than from `placed`, which
+  // is the display list and is derived by filtering candidate ids. The fallback
+  // body renders exactly what `partition.inline` would have carried, so that is
+  // what the count means.
   const baseBody = [
     ...shared,
     ...findingsSection([], continuing),
-    ...tailFor(unplaced.length + placed.length),
+    ...tailFor(unplaced.length + partition.inline.length),
   ].join('\n');
   const body = [
     ...shared,
