@@ -117,6 +117,8 @@ test('a superseded run explains itself in the run and the check', async () => {
   assert.equal(exitCode, 1);
   assert.match(outputs, /status=superseded/);
   assert.match(stdout, /^::warning::.*no review was published/m);
+  assert.equal(stdout.trim().split('\n').length, 1);
+  assert.doesNotMatch(stdout, /ai-notice:v1/);
   assert.match(requests, /"conclusion":"neutral"/);
   assert.match(requests, /reviews the newer commit/);
 });

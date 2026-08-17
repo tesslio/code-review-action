@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { AI_SYSTEM_NOTICE } from '../src/ai-notice.mjs';
 import {
   CHECK_NAME,
   checkRunReport,
@@ -121,26 +120,9 @@ test('an unrecognized status concludes without a verdict', () => {
   assert.deepEqual(checkRunReport({ mode: 'gate', status: 'invented' }), {
     conclusion: 'neutral',
     title: 'Review status unrecognized',
-    summary: `Tessl Code Review finished with a status this revision of the Action does not recognize. Open the workflow run for details.\n\n${AI_SYSTEM_NOTICE}`,
+    summary:
+      'Tessl Code Review finished with a status this revision of the Action does not recognize. Open the workflow run for details.',
   });
-});
-
-test('check-run summaries carry the hidden AI-system notice', () => {
-  for (const status of [
-    'approved',
-    'advisory-findings',
-    'changes-requested',
-    'technical-failure',
-    'publication-failure',
-    'gate-configuration-failure',
-    'gate-verdict-failure',
-    'superseded',
-    'skipped-no-matching-lenses',
-    'invented',
-  ]) {
-    const summary = checkRunReport({ mode: 'gate', status }).summary;
-    assert.equal(summary.split(AI_SYSTEM_NOTICE).length - 1, 1);
-  }
 });
 
 test('every status the conclusion model produces has its own report', () => {
@@ -190,7 +172,6 @@ test('the check run starts in progress against the reviewed head', async () => {
   assert.deepEqual(api.calls[0].payload.name, CHECK_NAME);
   assert.equal(api.calls[0].payload.head_sha, 'a'.repeat(40));
   assert.equal(api.calls[0].payload.status, 'in_progress');
-  assert.match(api.calls[0].payload.output.summary, /ai-notice:v1/);
 });
 
 test('a missing checks permission degrades to a warning instead of an error', async () => {
@@ -273,5 +254,4 @@ test('concluding completes the started check run with the mapped conclusion', as
   assert.equal(api.calls[0].payload.status, 'completed');
   assert.equal(api.calls[0].payload.conclusion, 'failure');
   assert.equal(api.calls[0].payload.output.title, 'Changes requested');
-  assert.match(api.calls[0].payload.output.summary, /ai-notice:v1/);
 });

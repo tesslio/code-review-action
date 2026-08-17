@@ -1,4 +1,3 @@
-import { withAiSystemNotice } from './ai-notice.mjs';
 import { GitHubApiError } from './github-api.mjs';
 
 export const CHECK_NAME = 'Tessl Code Review';
@@ -107,7 +106,7 @@ export function checkRunReport({ mode, status }) {
   return {
     conclusion: report[mode],
     title: report.title,
-    summary: withAiSystemNotice(summaryFor(report, mode)),
+    summary: summaryFor(report, mode),
   };
 }
 
@@ -141,9 +140,7 @@ export async function startReviewCheckRun({
       details_url: detailsUrl,
       output: {
         title: 'Review in progress',
-        summary: withAiSystemNotice(
-          `Tessl Code Review is reviewing ${headSha}.`,
-        ),
+        summary: `Tessl Code Review is reviewing ${headSha}.`,
       },
     });
     return created?.id;

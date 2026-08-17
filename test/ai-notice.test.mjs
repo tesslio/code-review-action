@@ -11,4 +11,8 @@ test('appends the hidden AI-system notice exactly once', () => {
   assert.equal(noticed, `Review body.\n\n${AI_SYSTEM_NOTICE}`);
   assert.equal(withAiSystemNotice(noticed), noticed);
   assert.equal(withAiSystemNotice(''), AI_SYSTEM_NOTICE);
+  assert.equal(
+    withAiSystemNotice('Review body.\n'),
+    `Review body.\n\n${AI_SYSTEM_NOTICE}`,
+  );
 });

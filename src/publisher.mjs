@@ -1,4 +1,3 @@
-import { withAiSystemNotice } from './ai-notice.mjs';
 import { GitHubApiError } from './github-api.mjs';
 import {
   FAILURE_MARKER,
@@ -44,17 +43,9 @@ async function createReviewWithReconciliation({
   marker,
   payload,
 }) {
-  const noticedPayload = {
-    ...payload,
-    body: withAiSystemNotice(payload.body),
-    comments: payload.comments.map((comment) => ({
-      ...comment,
-      body: withAiSystemNotice(comment.body),
-    })),
-  };
   try {
     return {
-      review: await api.createReview(prNumber, noticedPayload),
+      review: await api.createReview(prNumber, payload),
       reconciled: false,
     };
   } catch (error) {
@@ -120,11 +111,7 @@ async function replyToPriorFindingThreads({
     });
     const attempts = await Promise.allSettled(
       replies.map((reply) =>
-        api.reply(
-          prNumber,
-          reply.rootCommentId,
-          withAiSystemNotice(reply.body),
-        ),
+        api.reply(prNumber, reply.rootCommentId, reply.body),
       ),
     );
     const failures = attempts.filter(
@@ -374,9 +361,7 @@ export async function publishCodeReview({
 }
 
 export async function publishFailureNotice({ api, prNumber, runUrl }) {
-  const body = withAiSystemNotice(
-    `${FAILURE_MARKER}\nTessl Code Review did not complete. [View the workflow run](${runUrl}).`,
-  );
+  const body = `${FAILURE_MARKER}\nTessl Code Review did not complete. [View the workflow run](${runUrl}).`;
   const comments = await api.issueComments(prNumber);
   const existing = comments.find(
     (comment) =>

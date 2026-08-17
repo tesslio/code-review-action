@@ -73,12 +73,13 @@ notice exactly once:
 GitHub does not render the comment, but an agent reading the underlying review,
 inline finding, reconciliation reply, failure notice, or check-run summary sees
 the disclaimer and validation instruction. Structured outputs and artifacts do
-not include it.
+not include it. `ai-notice:v1` is a supported marker: consumers may use its
+presence to identify Markdown published by the Action as AI-generated.
 
 The published review body carries HTML comment markers. Most are internal: the
-Action uses them to find its own review, thread, and replies across runs. One is
-a supported contract for a consumer that reads the review over the GitHub API
-rather than from the run that produced it.
+Action uses them to find its own review, thread, and replies across runs. The
+other supported marker is a contract for a consumer that reads the review over
+the GitHub API rather than from the run that produced it.
 
 ```
 <!-- tessl-code-review:result:v1 approved=false findings-total=4 findings-unplaced=1 -->
@@ -108,9 +109,9 @@ Format:
 
 - Version lives in the key. A consumer matches `result:v1` and rejects an
   unrecognised version without parsing it.
-- Bare space-separated `key=value` in kebab-case, as every marker in this
-  vocabulary is written. A value is never quoted, never empty, and never contains
-  whitespace or `>`, so every field can be read with one pattern.
+- The `result:v1` marker uses bare space-separated `key=value` fields in
+  kebab-case. A value is never quoted, never empty, and never contains whitespace
+  or `>`, so every field can be read with one pattern.
 - Booleans and integers are written literally. A future string-valued field is
   percent-encoded, as `lenses:v1` refs are, which puts `-->` out of reach inside
   a value.
