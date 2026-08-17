@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { AI_SYSTEM_NOTICE } from '../src/ai-notice.mjs';
 import { GitHubApiError } from '../src/github-api.mjs';
 import { FAILURE_MARKER, attemptMarker } from '../src/protocol.mjs';
 import {
@@ -313,6 +314,7 @@ test('publishes the requested GitHub review event', async () => {
   });
 
   assert.equal(api.calls[0][1].event, 'APPROVE');
+  assert.equal(api.calls[0][1].body.split(AI_SYSTEM_NOTICE).length - 1, 1);
   assert.equal(published.intendedEvent, 'APPROVE');
   assert.equal(published.publishedEvent, 'APPROVE');
 });
@@ -450,6 +452,11 @@ test('failure notice is stable and a successful retry removes it', async () => {
     api.calls.filter(([name]) => name === 'updateIssueComment').length,
     1,
   );
+  assert.equal(
+    api.calls.find(([name]) => name === 'updateIssueComment')[2]
+      .split(AI_SYSTEM_NOTICE).length - 1,
+    1,
+  );
 
   const removed = await removeFailureNotices({ api, prNumber: 10 });
   assert.equal(removed, 1);
@@ -475,10 +482,11 @@ test('creates a failure notice rather than editing a human marker', async () => 
     runUrl: 'https://github.com/run/1',
   });
   assert.equal(failure.status, 'created');
-  assert.equal(
-    api.calls.filter(([name]) => name === 'createIssueComment').length,
-    1,
+  const created = api.calls.filter(
+    ([name]) => name === 'createIssueComment',
   );
+  assert.equal(created.length, 1);
+  assert.equal(created[0][1].split(AI_SYSTEM_NOTICE).length - 1, 1);
 });
 
 test('answers a still-applying prior whose thread ends on a fix claim', async () => {
@@ -555,11 +563,16 @@ test('answers a still-applying prior whose thread ends on a fix claim', async ()
   assert.match(payload.body, /Provide a safe restore procedure/);
   assert.match(payload.body, /Do not delete every overlapping ruleset/);
   assert.equal(payload.comments.length, 1);
+  assert.equal(
+    payload.comments[0].body.split(AI_SYSTEM_NOTICE).length - 1,
+    1,
+  );
 
   const replies = api.calls.filter(([name]) => name === 'reply');
   assert.equal(replies.length, 1);
   assert.equal(replies[0][2], 10);
   assert.match(replies[0][3], /Still applies after re-review\./);
+  assert.equal(replies[0][3].split(AI_SYSTEM_NOTICE).length - 1, 1);
 });
 
 test('replies to a user-participated earlier finding after publication', async () => {
