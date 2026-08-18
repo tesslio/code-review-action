@@ -63,6 +63,18 @@ The default configuration runs the `standard` profile in advisory mode.
       ["tessl/code-review@0.0.3#review-security-and-privacy","tessl/code-review@0.0.3#review-correctness-and-data-integrity"]
 ```
 
+To route lenses with a repository YAML profile, pass its path explicitly:
+
+```yaml
+with:
+  tessl-token: ${{ secrets.TESSL_TOKEN }}
+  profile: ./.tessl-code-review.yml
+  mode: advisory
+```
+
+Profiles are not discovered automatically. Omitting `profile` continues to use
+`standard`.
+
 Passing `lenses` replaces the profile's default lens selection with the exact
 ordered JSON array. A review supports at most 8 lenses. Pin registry
 references so the review does not change when a plugin publishes a new

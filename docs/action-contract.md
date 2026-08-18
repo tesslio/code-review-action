@@ -7,7 +7,7 @@ The supported entry point is `action.yml`.
 | Input | Required | Behavior |
 | --- | --- | --- |
 | `tessl-token` | yes | Authenticates the Tessl CLI. |
-| `profile` | no | Named review profile. Defaults to `standard`. |
+| `profile` | no | Named review profile or repository `.yml` or `.yaml` profile path. Defaults to `standard`; file profiles are not discovered automatically. |
 | `lenses` | no | JSON array containing the complete ordered lens selection, at most 8 entries. Empty uses profile defaults. |
 | `mode` | no | `advisory` or `gate`. Defaults to `advisory`. |
 | `pr-number` | no | Open pull-request number for an event without pull-request context. |

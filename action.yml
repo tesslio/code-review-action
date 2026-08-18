@@ -11,7 +11,7 @@ inputs:
     description: Tessl API token used by the CLI
     required: true
   profile:
-    description: Named Code Review profile
+    description: Named Code Review profile or repository YAML profile path
     required: false
     default: standard
   model:
