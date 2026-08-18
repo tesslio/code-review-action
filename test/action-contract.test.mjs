@@ -54,7 +54,7 @@ test('checks out the reviewed head without persisted credentials', () => {
   );
   assert.doesNotMatch(action, /path: \$\{\{ runner\.temp \}\}/);
   assert.match(action, /persist-credentials: false/);
-  assert.match(action, /version: 0\.96\.0/);
+  assert.match(action, /version: 0\.97\.0/);
   assert.doesNotMatch(action, /version: latest/);
 });
 
