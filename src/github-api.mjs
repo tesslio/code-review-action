@@ -1,6 +1,19 @@
+import { withAiSystemNotice } from './ai-notice.mjs';
+
 const API_VERSION = '2022-11-28';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRY_DELAYS_MS = [250, 1_000];
+
+function noticedCheckRunPayload(payload) {
+  if (payload.output === undefined) return payload;
+  return {
+    ...payload,
+    output: {
+      ...payload.output,
+      summary: withAiSystemNotice(payload.output.summary),
+    },
+  };
+}
 
 function isRetryableResponse(response) {
   if (response.status === 429 || response.status >= 500) return true;
@@ -114,30 +127,42 @@ export class GitHubCodeReviewApi {
   }
 
   createReview(number, payload) {
+    const noticed = {
+      ...payload,
+      body: withAiSystemNotice(payload.body),
+      ...(payload.comments === undefined
+        ? {}
+        : {
+            comments: payload.comments.map((comment) => ({
+              ...comment,
+              body: withAiSystemNotice(comment.body),
+            })),
+          }),
+    };
     return this.request(`/repos/${this.repository}/pulls/${number}/reviews`, {
       method: 'POST',
-      body: payload,
+      body: noticed,
     });
   }
 
   reply(number, rootCommentId, body) {
     return this.request(
       `/repos/${this.repository}/pulls/${number}/comments/${rootCommentId}/replies`,
-      { method: 'POST', body: { body } },
+      { method: 'POST', body: { body: withAiSystemNotice(body) } },
     );
   }
 
   createCheckRun(payload) {
     return this.request(`/repos/${this.repository}/check-runs`, {
       method: 'POST',
-      body: payload,
+      body: noticedCheckRunPayload(payload),
     });
   }
 
   updateCheckRun(checkRunId, payload) {
     return this.request(
       `/repos/${this.repository}/check-runs/${checkRunId}`,
-      { method: 'PATCH', body: payload },
+      { method: 'PATCH', body: noticedCheckRunPayload(payload) },
     );
   }
 
@@ -148,7 +173,7 @@ export class GitHubCodeReviewApi {
   createIssueComment(number, body) {
     return this.request(`/repos/${this.repository}/issues/${number}/comments`, {
       method: 'POST',
-      body: { body },
+      body: { body: withAiSystemNotice(body) },
     });
   }
 
@@ -157,7 +182,7 @@ export class GitHubCodeReviewApi {
       `/repos/${this.repository}/issues/comments/${commentId}`,
       {
         method: 'PATCH',
-        body: { body },
+        body: { body: withAiSystemNotice(body) },
       },
     );
   }

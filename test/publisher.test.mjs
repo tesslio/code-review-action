@@ -475,10 +475,8 @@ test('creates a failure notice rather than editing a human marker', async () => 
     runUrl: 'https://github.com/run/1',
   });
   assert.equal(failure.status, 'created');
-  assert.equal(
-    api.calls.filter(([name]) => name === 'createIssueComment').length,
-    1,
-  );
+  const created = api.calls.filter(([name]) => name === 'createIssueComment');
+  assert.equal(created.length, 1);
 });
 
 test('answers a still-applying prior whose thread ends on a fix claim', async () => {

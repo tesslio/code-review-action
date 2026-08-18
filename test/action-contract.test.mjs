@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
+import { AI_SYSTEM_NOTICE } from '../src/ai-notice.mjs';
 import { resultMarker } from '../src/protocol.mjs';
 
 const action = await readFile(new URL('../action.yml', import.meta.url), 'utf8');
@@ -122,6 +123,8 @@ test('documents the artifact field allowlist it enforces', () => {
 
 test('documents the result marker a consumer is entitled to rely on', () => {
   assert.match(contract, /## Comment protocol/);
+  assert.ok(contract.includes(AI_SYSTEM_NOTICE));
+  assert.match(contract, /`ai-notice:v1` is a supported marker/);
   // The documented example must be the grammar the Action emits: bare
   // space-separated key=value, nothing quoted.
   const example = contract.match(
