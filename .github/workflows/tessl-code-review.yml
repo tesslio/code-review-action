@@ -1,0 +1,64 @@
+name: Tessl Code Review
+
+# Gate mode: changes approved passes the Tessl Code Review check, changes
+# requested fails it. A blocked pull request does not unblock itself, because
+# only opening the PR or a mention starts a review. Mention @tessl-code-review
+# in a comment to have the new head reviewed and the check reported against it.
+on:
+  pull_request:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: Pull-request number to review
+        required: true
+
+# The minimum the Action needs: read the head to review it, report the
+# Tessl Code Review check on it, publish a native review, and post or clear a
+# visible failure notice.
+permissions:
+  contents: read
+  checks: write
+  issues: write
+  pull-requests: write
+
+# One review at a time per pull request. A newer run waits instead of
+# superseding the running one.
+concurrency:
+  group: tessl-code-review-${{ github.event.pull_request.number || github.event.issue.number || inputs['pr-number'] }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    # Run when a pull request is opened, for an explicit dispatch, or for a
+    # comment on an open pull request that mentions @tessl-code-review, by an
+    # owner, an organization member, or an invited collaborator.
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        github.event.issue.state == 'open' &&
+        contains(github.event.comment.body, '@tessl-code-review') &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Pinned to a full commit SHA, resolved from the current supported Tessl
+      # Code Review release when this workflow was written, and changed only as
+      # a reviewed update. The Action checks out the pull-request head itself,
+      # so this job needs no checkout step.
+      - uses: tesslio/code-review-action@c6c5070082b1a578993552756e22fe0fef58015b # v1.1.0
+        with:
+          tessl-token: ${{ secrets.TESSL_TOKEN }}
+          # Named review profile. The standard profile is the supported default.
+          profile: standard
+          # gate publishes an approve or request-changes review and reports the
+          # Tessl Code Review check accordingly.
+          mode: gate
+          # Supplies the pull-request number for events that carry no
+          # pull-request context. Empty on pull_request events, where the Action
+          # resolves the pull request itself.
+          pr-number: ${{ github.event.issue.number || inputs['pr-number'] }}
