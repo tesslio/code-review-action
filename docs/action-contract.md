@@ -104,10 +104,12 @@ review itself: its body, the inline findings, and the replies that reconcile
 earlier findings across rounds. The **Action** publishes the check-run summary
 and, when a review does not complete, the visible failure notice.
 
-The CLI's review carries a hidden AI-system notice, because a review is a model's
-output. The Action's own bodies carry no marker of their own: a check-run summary
-is one of a fixed set of status sentences written by hand, and the failure notice
-is a hand-written sentence published precisely when the model produced nothing.
+The CLI stamps a hidden AI-system notice on the review it publishes, because a
+review is a model's output. That is the CLI's behaviour, not this Action's: the
+Action neither adds the notice nor verifies that the installed CLI did. The
+Action's own bodies carry no marker of their own: a check-run summary is one of a
+fixed set of status sentences written by hand, and the failure notice is a
+hand-written sentence published precisely when the model produced nothing.
 Labelling either as model output would make the marker mean less wherever it does
 appear, and it is an HTML comment, so filtering is the only thing it is for.
 
