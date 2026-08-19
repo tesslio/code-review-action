@@ -1,19 +1,8 @@
-import { isNoMatchingLensesResult } from './result-file.mjs';
-
-/**
- * The receipt statuses that mean the review reached its pull request. Named
- * rather than inferred from the absence of the failure cases: the CLI is no
- * longer pinned by this Action, so it can report a status this revision has
- * never heard of, and an unrecognised one must not read as a published review.
- */
-const PUBLISHED_STATUSES = new Set(['published', 'reused']);
-
-/** Every receipt status this revision understands, successful or not. */
-const KNOWN_STATUSES = new Set([
-  ...PUBLISHED_STATUSES,
-  'superseded',
-  'published-with-policy-fallback',
-]);
+import {
+  KNOWN_RECEIPT_STATUSES,
+  PUBLISHED_STATUSES,
+  isNoMatchingLensesResult,
+} from './result-file.mjs';
 
 /** Whether the run reached a terminal state that published or deliberately did not. */
 export function isCompletedPublication(publication) {
@@ -57,15 +46,13 @@ export function reviewConclusion({ mode, reviewExitCode, result, headSha }) {
   }
 
   // The check run is attached to the head this Action resolved and checked out,
-  // so a verdict for any other revision must not conclude it. The CLI resolves
-  // the pull request itself and can legitimately review a newer head; that head
-  // simply is not the one under check here.
+  // so it can only be concluded by a verdict that identifies that exact
+  // revision. A different one is a head the CLI resolved for itself and is not
+  // the one under check; an absent one establishes nothing at all, and passing
+  // a gate on it would assert a verdict for a commit nothing named. Both fail
+  // closed, so equality with the resolved head is the only way through.
   const reviewedHead = result?.outcome?.subject?.change?.headRevision;
-  if (
-    headSha !== undefined &&
-    reviewedHead !== undefined &&
-    reviewedHead !== headSha
-  ) {
+  if (headSha !== undefined && reviewedHead !== headSha) {
     return { status: 'superseded', exitCode: 1 };
   }
 
@@ -77,7 +64,7 @@ export function reviewConclusion({ mode, reviewExitCode, result, headSha }) {
   }
 
   const publication = result?.publication;
-  if (!KNOWN_STATUSES.has(publication?.status)) {
+  if (!KNOWN_RECEIPT_STATUSES.has(publication?.status)) {
     return { status: 'publication-failure', exitCode: 1 };
   }
   if (publication.status === 'superseded') {

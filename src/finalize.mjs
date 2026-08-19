@@ -35,9 +35,17 @@ async function concludeCheckRun(status) {
 /**
  * Clear notices left by earlier failed runs once a run has completed.
  *
- * Completion, not approval: a gate that publishes requested changes exits
+ * Two constraints have to hold together, and each rules out the obvious key.
+ * Completion is not approval: a gate publishing requested changes concludes
  * non-zero by design, and so does the policy fallback, but both reached the
- * pull request — a notice saying the review did not complete would be false.
+ * pull request, so keying on this Action's exit code would leave a false
+ * "did not complete" notice on a review that did. And a receipt is not
+ * completion either: a CLI can write a published receipt and still exit
+ * non-zero afterwards, and clearing then would delete the notice posted for
+ * that very failure.
+ *
+ * So both are required — the CLI invocation finished, and it reached a
+ * terminal state that published or deliberately did not.
  *
  * Best effort: the review is done either way, and a stale notice is worth a
  * warning rather than a failed job. This is the one piece of publication that
@@ -93,8 +101,9 @@ if (conclusion.status === 'superseded') {
 }
 
 if (
-  conclusion.status === 'skipped-no-matching-lenses' ||
-  isCompletedPublication(reviewResult?.publication)
+  process.env.REVIEW_EXIT_CODE === '0' &&
+  (conclusion.status === 'skipped-no-matching-lenses' ||
+    isCompletedPublication(reviewResult?.publication))
 ) {
   await clearStaleFailureNotices();
 }

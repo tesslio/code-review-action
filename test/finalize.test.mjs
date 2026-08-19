@@ -16,6 +16,8 @@ async function finalize({
   approved = true,
   result,
   publication = { status: 'published' },
+  reviewExitCode = '0',
+  prNumber = '42',
   writableOutputs = true,
 }) {
   const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
@@ -44,7 +46,8 @@ async function finalize({
           REPOSITORY: 'acme/widgets',
           RUN_URL: 'https://github.example/run/1',
           MODE: mode,
-          REVIEW_EXIT_CODE: '0',
+          REVIEW_EXIT_CODE: reviewExitCode,
+          PR_NUMBER: prNumber,
           REVIEW_OUTPUT: join(directory, 'result.json'),
           GITHUB_OUTPUT: writableOutputs
             ? outputs
@@ -82,13 +85,13 @@ test('sends no check-run request when no check run was created', async () => {
 
   assert.equal(exitCode, 0);
   assert.match(outputs, /status=approved/);
-  assert.equal(requests, '');
+  assert.doesNotMatch(requests, /check-runs/);
 });
 
 test('sends no check-run request when the step output is absent', async () => {
   const { requests } = await finalize({ checkRunId: undefined });
 
-  assert.equal(requests, '');
+  assert.doesNotMatch(requests, /check-runs/);
 });
 
 test('reports an unreadable result as a review failure without a second annotation', async () => {
@@ -150,4 +153,22 @@ test('concludes the check run when the step output cannot be written', async () 
   assert.notEqual(exitCode, 0);
   assert.match(requests, /PATCH .*\/check-runs\/987654/);
   assert.match(requests, /"conclusion":"failure"/);
+});
+
+test('a completed review clears a stale notice even when it requests changes', async () => {
+  // Completion is not approval: a gate publishing requested changes concludes
+  // non-zero by design, and the notice saying it did not complete is false.
+  const { requests } = await finalize({ mode: 'gate', approved: false });
+  assert.match(requests, /\/issues\/42\/comments/);
+});
+
+test('a nonzero CLI invocation keeps its notice despite a published receipt', async () => {
+  // The CLI can write a published receipt and still fail afterwards. Clearing
+  // then would delete the notice posted for that very failure.
+  const { outputs, requests } = await finalize({
+    mode: 'gate',
+    reviewExitCode: '1',
+  });
+  assert.match(outputs, /status=publication-failure/);
+  assert.doesNotMatch(requests, /\/issues\/42\/comments/);
 });

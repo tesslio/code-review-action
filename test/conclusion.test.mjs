@@ -171,6 +171,15 @@ test('a verdict for another revision cannot conclude this head', () => {
   );
 });
 
+test('a verdict that names no revision cannot conclude this head either', () => {
+  // Passing a gate on an outcome that identifies no commit would assert a
+  // verdict for a revision nothing named.
+  assert.deepEqual(
+    reviewConclusion(valid({ mode: 'gate', headSha: 'aaa' })),
+    { status: 'superseded', exitCode: 1 },
+  );
+});
+
 test('an unrecognised receipt status fails closed', () => {
   // The CLI is not pinned by this Action, so it can report a status this
   // revision has never seen. Falling through would call it a published review.
