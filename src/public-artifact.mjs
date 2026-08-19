@@ -26,6 +26,9 @@ const OUTCOME_FIELDS = [
 ];
 const SUBJECT_FIELDS = ['schemaVersion', 'repository'];
 const CHANGE_FIELDS = ['baseRevision', 'headRevision', 'headKind'];
+// Each entry is the effort a lens is configured to run at, not proof that it
+// ran: a lens whose globs select nothing is listed and skipped. Which lenses
+// produced findings is recoverable from each finding's `lensRefs`.
 // A finding carries its location either nested under `location` or flat on the
 // finding itself, and both forms are published so that neither loses it.
 const FINDING_FIELDS = [
@@ -79,12 +82,32 @@ function publicFinding(finding) {
   };
 }
 
+// The only shape in the artifact that is an array of objects the CLI builds per
+// run, so it is constructed rather than picked: a value of an unexpected type is
+// dropped instead of serialized, and no nested structure can ride in on either
+// field. The CLI already bounds a ref to a string and an effort to a fixed set,
+// so this guards against a malformed result rather than a reachable input.
+function publicLens(lens) {
+  if (typeof lens?.ref !== 'string') return undefined;
+  return {
+    ref: lens.ref,
+    ...(typeof lens.effort === 'string' ? { effort: lens.effort } : {}),
+  };
+}
+
 function publicOutcome(outcome) {
   return {
     ...pick(outcome, OUTCOME_FIELDS),
     ...(outcome.subject === undefined
       ? {}
       : { subject: publicSubject(outcome.subject) }),
+    ...(Array.isArray(outcome.lenses)
+      ? {
+          lenses: outcome.lenses
+            .map(publicLens)
+            .filter((lens) => lens !== undefined),
+        }
+      : {}),
     ...(Array.isArray(outcome.findings)
       ? { findings: outcome.findings.map(publicFinding) }
       : {}),

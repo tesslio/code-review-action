@@ -119,6 +119,10 @@ test('documents the fail-closed gate and the superseded outcome', () => {
 test('documents the artifact field allowlist it enforces', () => {
   assert.match(contract, /## Public artifact schema/);
   assert.match(contract, /`outcome.findings\[\].location`/);
+  assert.match(contract, /`outcome.lenses\[\]`/);
+  // The configured-not-dispatched semantic is the sentence a consumer builds
+  // on, so it is part of the contract rather than incidental prose.
+  assert.match(contract, /membership is not evidence the lens ran/);
 });
 
 test('documents the result marker a consumer is entitled to rely on', () => {
