@@ -187,6 +187,19 @@ export class GitHubCodeReviewApi {
     );
   }
 
+  /**
+   * React to a comment. Conversation comments and inline review comments are
+   * different resources with separate reaction endpoints and separate id
+   * spaces, so the caller states which kind it holds.
+   */
+  addCommentReaction({ kind, commentId, content }) {
+    const collection = kind === 'review-comment' ? 'pulls' : 'issues';
+    return this.request(
+      `/repos/${this.repository}/${collection}/comments/${commentId}/reactions`,
+      { method: 'POST', body: { content } },
+    );
+  }
+
   deleteIssueComment(commentId) {
     return this.request(
       `/repos/${this.repository}/issues/comments/${commentId}`,

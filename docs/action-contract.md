@@ -78,6 +78,25 @@ the artifact does not carry.
 `publication` is the Action's own receipt rather than CLI output, and it is
 recorded as produced.
 
+## Mention acknowledgement
+
+When the run was started by a comment — `issue_comment` or
+`pull_request_review_comment` — the Action reacts 👀 to that comment before it
+resolves the pull request or reports the check run. A caller needs no step of
+its own for this, and passes nothing extra: the Action reads the event's comment
+from the workflow context.
+
+Conversation comments and inline review comments have separate reaction
+endpoints, and the Action picks the one matching the event.
+
+Acknowledging is best effort. A refused or failed reaction is reported as a run
+notice and the review proceeds; nothing about a review depends on it. A run
+started by `pull_request` or `workflow_dispatch` has no comment to answer and
+reacts to nothing.
+
+Deciding whether a comment is a request for review remains the caller's: the
+Action reacts to the comment the caller admitted.
+
 ## Comment protocol
 
 Every GitHub-rendered Markdown body published by the Action carries this hidden
@@ -249,8 +268,8 @@ check run of the same name supersedes the abandoned one.
 | --- | --- | --- |
 | `contents` | read | Resolve and check out the exact pull-request head. |
 | `checks` | write | Report the review result on the reviewed head. |
-| `pull-requests` | write | Publish a native pull-request review. |
-| `issues` | write | Publish and clear visible failure notices. |
+| `pull-requests` | write | Publish a native pull-request review, and react to a triggering inline review comment. |
+| `issues` | write | Publish and clear visible failure notices, and react to a triggering conversation comment. |
 
 Without `checks: write`, the Action logs a warning naming the missing
 permission and completes as it otherwise would. No other behavior depends on

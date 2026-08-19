@@ -75,6 +75,20 @@ outputs:
 runs:
   using: composite
   steps:
+    # First, before anything visible happens: the reaction is the only signal
+    # that reaches the person at the moment they asked, and the check run below
+    # already tells them a review is running. Comment events only; any failure
+    # is a notice, never a failed review.
+    - name: Acknowledge the triggering comment
+      if: github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        REPOSITORY: ${{ github.repository }}
+        EVENT_NAME: ${{ github.event_name }}
+        COMMENT_ID: ${{ github.event.comment.id }}
+      run: node "$GITHUB_ACTION_PATH/src/acknowledge-comment.mjs"
+
     - name: Validate Action inputs
       shell: bash
       env:
