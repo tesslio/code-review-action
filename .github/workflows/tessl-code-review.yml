@@ -1,0 +1,105 @@
+name: Tessl Code Review
+
+# Gate mode: changes approved passes the Tessl Code Review check, changes
+# requested fails it. A blocked pull request does not unblock itself, because
+# only opening the PR or a mention starts a review. Mention @tessl-code-review
+# in a comment to have the new head reviewed and the check reported against it.
+on:
+  pull_request:
+    types: [opened]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr-number:
+        description: Pull-request number to review
+        required: true
+
+# The minimum the Action needs: read the head to review it, report the
+# Tessl Code Review check on it, publish a native review, and post or clear a
+# visible failure notice.
+permissions:
+  contents: read
+  checks: write
+  issues: write
+  pull-requests: write
+
+# One review at a time per pull request. A newer run waits instead of
+# superseding the running one.
+concurrency:
+  group: tessl-code-review-${{ github.event.pull_request.number || github.event.issue.number || inputs['pr-number'] }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    # Run for an opened pull request, an explicit dispatch, or a comment on an
+    # open pull request by an owner, an organization member, or an invited
+    # collaborator. Whether such a comment actually mentions @tessl-code-review
+    # as a whole token is decided by the mention-gate step below, because a
+    # GitHub Actions expression cannot match a token boundary reliably
+    # (\n in an expression literal is a backslash and an n, not a line feed,
+    # and there is no regex or tab literal), so parsing the body here would
+    # miss real newlines, tabs, and other delimiters.
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request != null &&
+        github.event.issue.state == 'open' &&
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # For an issue_comment event, decide whether the body mentions
+      # @tessl-code-review as a whole token. grep sees real whitespace and
+      # delimiters, so a mention after a line break or a tab counts, while
+      # @tessl-code-reviewer and other longer handles do not: the token must be
+      # bounded by the start/end of a line or a non-[[:alnum:]_-] character.
+      # The match is case-insensitive, and grep scans line by line so the
+      # mention counts wherever it appears in the body. The POSIX ERE pattern
+      # (grep -E) runs on the stock runner grep without relying on PCRE.
+      # Non-comment events set mention=skip so the action step's condition
+      # falls through to the event-name checks.
+      - id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "issue_comment" ]]; then
+            echo "mention=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s' "$COMMENT_BODY" \
+            | grep -qiE '(^|[^[:alnum:]_-])@tessl-code-review([^[:alnum:]_-]|$)'; then
+            echo "mention=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mention=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Pinned to a full commit SHA, resolved from the current supported Tessl
+      # Code Review release when this workflow was written, and changed only as
+      # a reviewed update. The Action checks out the pull-request head itself,
+      # so this job needs no checkout step. Runs for a pull_request or dispatch
+      # event, or for an issue_comment the mention-gate step confirmed.
+      - if: github.event_name != 'issue_comment' || steps.gate.outputs.mention == 'true'
+        uses: tesslio/code-review-action@c6c5070082b1a578993552756e22fe0fef58015b # v1.1.0
+        with:
+          tessl-token: ${{ secrets.TESSL_TOKEN }}
+          # Named review profile. The standard profile is the supported default.
+          profile: standard
+          # gate publishes an approve or request-changes review and reports the
+          # Tessl Code Review check accordingly.
+          mode: gate
+          # Explicit lens selection so a required gate always produces a verdict.
+          # Without pinned lenses, a pull request matching none of the profile's
+          # lenses yields skipped-no-matching-lenses, which reports a neutral
+          # check; GitHub treats a neutral required check as passing, letting a
+          # pull request satisfy the gate with no approval.
+          lenses: >-
+            ["tessl/code-review@0.1.0#review-correctness-and-data-integrity","tessl/code-review@0.1.0#review-security-and-privacy","tessl/code-review@0.1.0#review-maintainability-and-code-quality"]
+          # Supplies the pull-request number for events that carry no
+          # pull-request context. Empty on pull_request events, where the Action
+          # resolves the pull request itself.
+          pr-number: ${{ github.event.issue.number || inputs['pr-number'] }}
