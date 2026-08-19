@@ -32,6 +32,22 @@ test('exposes one product-level Action contract', () => {
   ]);
 });
 
+test('rejects an effort outside the values it advertises', () => {
+  const step = action.slice(
+    action.indexOf('name: Validate Action inputs'),
+    action.indexOf('name: Resolve pull request'),
+  );
+  assert.match(step, /EFFORT: \$\{\{ inputs\.effort \}\}/);
+  // Empty stays legal: it is how a caller defers to the profile and the CLI.
+  assert.match(step, /-z "\$EFFORT"/);
+  for (const value of ['low', 'medium', 'high']) {
+    assert.match(step, new RegExp(`"\\$EFFORT" == "${value}"`));
+  }
+  // Advertised as supported configuration, so it belongs in the Inputs table
+  // rather than only in the action metadata.
+  assert.match(contract, /^\| `effort` \| no \|/m);
+});
+
 test('pins third-party Actions by full commit SHA', () => {
   const references = [...action.matchAll(/^\s+uses:\s+([^\s]+)/gm)].map(
     (match) => match[1],

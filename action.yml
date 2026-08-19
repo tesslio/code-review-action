@@ -25,8 +25,9 @@ inputs:
   effort:
     description: >-
       Reasoning effort for every review lens: low, medium or high. Overrides any
-      effort the profile sets, including a per-lens one. Empty falls back to a
-      lens's own effort, then the profile's, then the model's own default.
+      effort the profile sets, including a per-lens one. Empty sends none,
+      leaving the installed CLI to resolve it from the profile and the model's
+      own default.
     required: false
     default: ''
   lenses:
@@ -81,6 +82,7 @@ runs:
         PROFILE: ${{ inputs.profile }}
         LENSES: ${{ inputs.lenses }}
         MODE: ${{ inputs.mode }}
+        EFFORT: ${{ inputs.effort }}
         PR_NUMBER_INPUT: ${{ inputs['pr-number'] }}
       run: |
         set -euo pipefail
@@ -88,6 +90,10 @@ runs:
         [[ -n "$PROFILE" ]] || { echo "::error::profile must not be empty."; exit 1; }
         [[ "$MODE" == "advisory" || "$MODE" == "gate" ]] || { echo "::error::mode must be advisory or gate."; exit 1; }
         [[ -z "$PR_NUMBER_INPUT" || "$PR_NUMBER_INPUT" =~ ^[1-9][0-9]*$ ]] || { echo "::error::pr-number must be a positive integer."; exit 1; }
+        # Rejected here rather than left to the CLI: an out-of-set value makes the
+        # CLI fail before it produces an outcome, and the artifact then falls back
+        # to the requested configuration, which would publish the raw value.
+        [[ -z "$EFFORT" || "$EFFORT" == "low" || "$EFFORT" == "medium" || "$EFFORT" == "high" ]] || { echo "::error::effort must be low, medium or high."; exit 1; }
         if [[ -n "$LENSES" ]]; then
           jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' <<< "$LENSES" >/dev/null || { echo "::error::lenses must be a JSON array of non-empty strings."; exit 1; }
         fi
