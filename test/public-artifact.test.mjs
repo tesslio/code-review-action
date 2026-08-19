@@ -101,6 +101,32 @@ test('publishes each configured lens with its effort', () => {
   assert.doesNotMatch(json, /globs|resolutionRef|internal/);
 });
 
+test('drops a malformed lens entry rather than serializing it', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: {
+        schemaVersion: 1,
+        lenses: [
+          { ref: 'tessl/code-review#review-security', effort: 'high' },
+          // No ref to identify it by, so there is nothing publishable.
+          { effort: 'high' },
+          // A nested value where a scalar belongs: dropped whole, so the
+          // structure cannot reach the artifact through either field.
+          { ref: { nested: 'not-a-ref' } },
+          { ref: './tiles/brand/SKILL.md', effort: { nested: 'not-an-effort' } },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(artifact.outcome.lenses, [
+    { ref: 'tessl/code-review#review-security', effort: 'high' },
+    { ref: './tiles/brand/SKILL.md' },
+  ]);
+  assert.doesNotMatch(JSON.stringify(artifact), /nested|not-a-ref|not-an-effort/);
+});
+
 test('omits lenses entirely for a CLI that does not report them', () => {
   const artifact = buildPublicArtifact({
     result: {
