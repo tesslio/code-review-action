@@ -11,6 +11,7 @@ The supported entry point is `action.yml`.
 | `lenses` | no | JSON array containing the complete ordered lens selection, at most 8 entries. Empty uses profile defaults. |
 | `mode` | no | `advisory` or `gate`. Defaults to `advisory`. |
 | `pr-number` | no | Open pull-request number for an event without pull-request context. |
+| `cli-version` | no | Tessl CLI version to install. Defaults to `latest`, which tracks the current release; set an exact version to fix the CLI alongside the Action's own commit SHA. |
 
 ## Outputs
 
@@ -19,8 +20,7 @@ The supported entry point is `action.yml`.
 | `status` | Terminal review status. |
 | `head-sha` | Exact reviewed pull-request head. |
 | `review-id` | Created or reused GitHub review ID, when available. |
-| `result-path` | Structured CLI result for later steps in the same job. |
-| `publication-path` | Publication receipt for later steps in the same job. |
+| `result-path` | Structured CLI result for later steps in the same job, including what it published. |
 | `result-artifact` | Name of the uploaded result artifact. |
 
 The uploaded artifact contains the review outcome, terminal status and reason,

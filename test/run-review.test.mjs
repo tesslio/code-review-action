@@ -9,7 +9,12 @@ import { test } from 'node:test';
 const run = promisify(execFile);
 const script = new URL('../src/run-review.sh', import.meta.url).pathname;
 
-async function capturedArguments({ model = '', effort = '', lenses = '' }) {
+async function capturedArguments({
+  model = '',
+  effort = '',
+  lenses = '',
+  mode = 'advisory',
+}) {
   const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
   const executable = join(directory, 'tessl');
   const capture = join(directory, 'arguments');
@@ -31,6 +36,7 @@ async function capturedArguments({ model = '', effort = '', lenses = '' }) {
         HEAD_SHA: 'a'.repeat(40),
         PR_NUMBER: '42',
         PROFILE: 'standard',
+        MODE: mode,
         MODEL: model,
         EFFORT: effort,
         LENSES: lenses,
@@ -50,6 +56,8 @@ test('leaves model and effort unset so the profile supplies them', async () => {
     '42',
     '--profile',
     'standard',
+    '--publish',
+    'comment',
     '--json',
   ]);
 });
@@ -68,9 +76,18 @@ test('forwards supplied model and effort overrides', async () => {
       'model-1',
       '--effort',
       'high',
+      '--publish',
+      'comment',
       '--json',
     ],
   );
+});
+
+test('gate mode publishes the verdict the review reached', async () => {
+  // The flag carries a value rather than being a boolean because the verdict
+  // does not exist until the review has run, so the CLI resolves it.
+  const args = await capturedArguments({ mode: 'gate' });
+  assert.deepEqual(args.slice(-3), ['--publish', 'verdict', '--json']);
 });
 
 test('exposes only the fixed status for a successful no-match result', async () => {
@@ -93,6 +110,7 @@ test('exposes only the fixed status for a successful no-match result', async () 
         HEAD_SHA: 'b'.repeat(40),
         PR_NUMBER: '42',
         PROFILE: 'standard',
+        MODE: 'advisory',
         MODEL: '',
         EFFORT: '',
         LENSES: '',
@@ -133,6 +151,7 @@ test('does not expose skipped routing when the CLI exits nonzero', async () => {
         HEAD_SHA: 'c'.repeat(40),
         PR_NUMBER: '42',
         PROFILE: 'standard',
+        MODE: 'advisory',
         MODEL: '',
         EFFORT: '',
         LENSES: '',

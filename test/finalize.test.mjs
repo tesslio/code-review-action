@@ -23,11 +23,12 @@ async function finalize({
   const requests = join(directory, 'requests');
   await writeFile(
     join(directory, 'result.json'),
-    result ?? JSON.stringify({ outcome: { approved } }),
-  );
-  await writeFile(
-    join(directory, 'publication.json'),
-    JSON.stringify(publication),
+    result ??
+      JSON.stringify({
+        status: 'ok',
+        outcome: { approved },
+        ...(publication === undefined ? {} : { publication }),
+      }),
   );
   await writeFile(outputs, '');
   await writeFile(requests, '');
@@ -44,9 +45,7 @@ async function finalize({
           RUN_URL: 'https://github.example/run/1',
           MODE: mode,
           REVIEW_EXIT_CODE: '0',
-          PUBLISH_EXIT_CODE: '0',
           REVIEW_OUTPUT: join(directory, 'result.json'),
-          PUBLISH_OUTPUT: join(directory, 'publication.json'),
           GITHUB_OUTPUT: writableOutputs
             ? outputs
             : join(directory, 'absent', 'outputs'),

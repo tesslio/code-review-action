@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 
 import { AI_SYSTEM_NOTICE } from '../src/ai-notice.mjs';
-import { resultMarker } from '../src/protocol.mjs';
 
 const action = await readFile(new URL('../action.yml', import.meta.url), 'utf8');
 const contract = await readFile(
@@ -28,6 +27,7 @@ test('exposes one product-level Action contract', () => {
     'lenses',
     'mode',
     'pr-number',
+    'cli-version',
     'cli-channel',
   ]);
 });
@@ -54,8 +54,17 @@ test('checks out the reviewed head without persisted credentials', () => {
   );
   assert.doesNotMatch(action, /path: \$\{\{ runner\.temp \}\}/);
   assert.match(action, /persist-credentials: false/);
-  assert.match(action, /version: 0\.97\.0/);
-  assert.doesNotMatch(action, /version: latest/);
+});
+
+test('the caller chooses the CLI version, and a mismatch is detected', () => {
+  // The CLI is no longer pinned by this Action, so improvements reach callers
+  // without an Action release. What replaces the pin is detection: an installed
+  // CLI that cannot publish has to fail by name, before the review runs, rather
+  // than deep in argument parsing.
+  assert.match(action, /version: \$\{\{ inputs\['cli-version'\] \}\}/);
+  const preflight = action.indexOf('Check the installed CLI can publish');
+  assert.ok(preflight > action.indexOf('tesslio/setup-tessl'));
+  assert.ok(preflight < action.indexOf('src/run-review.sh'));
 });
 
 test('reports a check run on the reviewed head and concludes it at finalize', () => {
@@ -96,14 +105,12 @@ test('documents approval as the public success status', () => {
   assert.match(contract, /`requiresChanges`/);
 });
 
-test('bypasses publication and failure notices for a no-match result', () => {
+test('publishes a failure notice only when the review itself failed', () => {
+  // The CLI reviews and publishes in one invocation, so its exit code is the
+  // only signal here; a no-match result exits zero and leaves no notice.
   assert.match(
     action,
-    /steps\.review\.outputs\['exit-code'\] == '0' && steps\.review\.outputs\['result-status'\] != 'skipped'/,
-  );
-  assert.match(
-    action,
-    /steps\.review\.outputs\['exit-code'\] != '0' \|\| \(steps\.review\.outputs\['result-status'\] != 'skipped' && steps\.publish\.outputs\['exit-code'\] != '0'\)/,
+    /if: always\(\) && steps\.review\.outputs\['exit-code'\] != '0'/,
   );
   assert.match(contract, /`skipped-no-matching-lenses`/);
   assert.match(contract, /`no-matching-lenses`/);
@@ -136,9 +143,13 @@ test('documents the result marker a consumer is entitled to rely on', () => {
   )?.[0];
   assert.ok(example, 'the contract must show the marker it promises');
   assert.doesNotMatch(example, /"/);
-  // Bound to the emitter, not to a second hardcoded field list: a change to the
-  // marker must fail here rather than leave the documented example stale.
-  assert.equal(example, resultMarker({ approved: false, total: 4, unplaced: 1 }));
+  // The CLI emits this marker, so the binding that used to tie this example to
+  // the emitter now lives beside it there. What stays checkable here is that
+  // the documented example is well formed and names the fields it promises.
+  assert.match(
+    example,
+    /^<!-- tessl-code-review:result:v1( [a-z][a-z0-9-]*=[^\s>]+)+ -->$/,
+  );
   const documented = [...example.matchAll(/([a-z][a-z0-9-]*)=([^\s>]+)/g)].map(
     ([, field]) => field,
   );

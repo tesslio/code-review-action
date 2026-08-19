@@ -52,8 +52,8 @@ test('builds artifacts from an explicit field allowlist', () => {
       },
       diagnostics: { durationMs: 123, extraMetrics: { value: 900 } },
       unpublishedField: 'not-for-artifact',
+      publication: { schemaVersion: 1, status: 'published', reviewId: 7 },
     },
-    publication: { schemaVersion: 1, status: 'published', reviewId: 7 },
     requestedLenses: '["tessl/code-review#review-security"]',
   });
 

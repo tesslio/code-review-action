@@ -304,7 +304,9 @@ other privileged triggers.
 ## Updating or removing the Action
 
 To update, replace the pinned commit SHA after reviewing the target release
-notes. To remove Tessl Code Review, delete the calling workflow and remove the
+notes. The Tessl CLI is not pinned by the Action, so review behaviour also
+follows CLI releases between Action updates; set the `cli-version` input to an
+exact version where a repository needs both fixed. To remove Tessl Code Review, delete the calling workflow and remove the
 `TESSL_TOKEN` repository secret. Also remove its required check from branch
 protection if gate mode was enabled.
 

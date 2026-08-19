@@ -27,3 +27,27 @@ export async function readReviewResult(path) {
     );
   }
 }
+
+export const NO_MATCHING_LENSES_REASON = 'no-matching-lenses';
+
+/**
+ * A successful review that deliberately has no publishable outcome: no
+ * configured lens matched the changed paths. Terminal and not a failure, so the
+ * discriminator lives beside the result it reads rather than with any one
+ * caller.
+ */
+export function isNoMatchingLensesResult(result) {
+  return (
+    result?.status === 'skipped' && result?.reason === NO_MATCHING_LENSES_REASON
+  );
+}
+
+/**
+ * What the CLI reported it did with the review on the pull request, or
+ * `undefined` when it published nothing. The CLI owns publication, so this is
+ * read from its result rather than produced here.
+ */
+export function publicationReceipt(result) {
+  const publication = result?.publication;
+  return typeof publication?.status === 'string' ? publication : undefined;
+}
