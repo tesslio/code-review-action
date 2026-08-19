@@ -15,7 +15,11 @@ inputs:
     required: false
     default: standard
   model:
-    description: Model override; empty uses the selected profile's default
+    # Reserved for Tessl's own callers, which pass it on internal runs. Not part
+    # of the supported input contract; an unset caller is unaffected. Do not
+    # remove it: internal callers set it, and the description stays uninformative
+    # on purpose rather than advertising what it does.
+    description: Reserved; leave unset
     required: false
     default: ''
   effort:
