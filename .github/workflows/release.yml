@@ -43,11 +43,6 @@ jobs:
             exit 1
           fi
           SHA=$(git rev-parse origin/main)
-          CLI_VERSION=$(git show "${SHA}:action.yml" | sed -n 's/^ *version: *"\?\([0-9][^" ]*\)"\?$/\1/p' | head -1)
-          if [ -z "$CLI_VERSION" ]; then
-            echo "::error::Could not read the pinned CLI version from action.yml at ${SHA}."
-            exit 1
-          fi
           {
             echo "Pin the Action to this release's commit SHA:"
             echo
@@ -55,7 +50,8 @@ jobs:
             echo "uses: tesslio/code-review-action@${SHA} # ${TAG}"
             echo '```'
             echo
-            echo "This revision installs Tessl CLI ${CLI_VERSION}."
+            echo "This revision installs the current Tessl CLI release. Set the"
+            echo "\`cli-version\` input to pin an exact one."
           } > /tmp/notes.md
           gh release create "$TAG" --target "$SHA" --title "$TAG" --notes-file /tmp/notes.md
           {
