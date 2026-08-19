@@ -123,7 +123,10 @@ runs:
 
     - name: Install Tessl CLI
       id: setup
-      uses: tesslio/setup-tessl@25ec223fc0da33b41b8044ff5ab2b85235f4f91e # v2
+      # Past v2, which sends the version into the download URL unencoded: a
+      # release carrying SemVer build metadata (`1.2.3+test.…`) then 403s,
+      # which is every prerelease build a caller might pin for validation.
+      uses: tesslio/setup-tessl@33e1c9253e3673f28e1b8949475b250dbd57918e # main@33e1c92
       with:
         version: ${{ inputs['cli-version'] }}
         token: ${{ inputs['tessl-token'] }}

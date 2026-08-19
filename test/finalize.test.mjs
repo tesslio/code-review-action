@@ -19,6 +19,7 @@ async function finalize({
   reviewExitCode = '0',
   prNumber = '42',
   headSha,
+  reviewOutput,
   writableOutputs = true,
 }) {
   const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
@@ -50,7 +51,10 @@ async function finalize({
           REVIEW_EXIT_CODE: reviewExitCode,
           PR_NUMBER: prNumber,
           ...(headSha === undefined ? {} : { HEAD_SHA: headSha }),
-          REVIEW_OUTPUT: join(directory, 'result.json'),
+          REVIEW_OUTPUT:
+            reviewOutput === undefined
+              ? join(directory, 'result.json')
+              : reviewOutput,
           GITHUB_OUTPUT: writableOutputs
             ? outputs
             : join(directory, 'absent', 'outputs'),
@@ -188,4 +192,18 @@ test('a verdict for another commit keeps the notice that says so', async () => {
   });
   assert.match(outputs, /status=superseded/);
   assert.doesNotMatch(requests, /\/issues\/42\/comments/);
+});
+
+test('a review step that never ran concludes rather than crashing', async () => {
+  // A skipped step leaves its outputs empty, not unset. Treating that as a
+  // path to open threw before the check run could be concluded cleanly.
+  const { exitCode, outputs, requests } = await finalize({
+    reviewExitCode: '',
+    reviewOutput: '',
+    checkRunId: '987654',
+  });
+
+  assert.equal(exitCode, 1);
+  assert.match(outputs, /status=technical-failure/);
+  assert.match(requests, /PATCH .*\/check-runs\/987654/);
 });

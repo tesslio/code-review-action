@@ -62,11 +62,14 @@ async function clearStaleFailureNotices() {
 
 let conclusion;
 try {
+  // A step that never ran leaves its outputs empty rather than unset, so an
+  // empty path is the review not having produced a result at all — which is a
+  // technical failure to report, not a file to open.
+  const resultPath = process.env.REVIEW_OUTPUT;
   const result =
-    process.env.REVIEW_EXIT_CODE === '0' ||
-    process.env.REVIEW_OUTPUT !== undefined
-      ? await readReviewResult(requiredEnv('REVIEW_OUTPUT'))
-      : undefined;
+    resultPath === undefined || resultPath === ''
+      ? undefined
+      : await readReviewResult(resultPath);
   conclusion = reviewConclusion({
     mode,
     reviewExitCode: process.env.REVIEW_EXIT_CODE,
