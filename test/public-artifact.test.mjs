@@ -72,6 +72,56 @@ test('builds artifacts from an explicit field allowlist', () => {
   assert.doesNotMatch(json, /extraMetrics|unpublishedField|not-for-artifact/);
 });
 
+test('publishes each configured lens with its effort', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: {
+        schemaVersion: 1,
+        lenses: [
+          { ref: 'tessl/code-review#review-security' },
+          {
+            ref: './tiles/brand/SKILL.md',
+            effort: 'low',
+            globs: ['**/*.md'],
+            resolutionRef: 'internal',
+          },
+        ],
+      },
+    },
+  });
+
+  assert.deepEqual(artifact.outcome.lenses, [
+    { ref: 'tessl/code-review#review-security' },
+    { ref: './tiles/brand/SKILL.md', effort: 'low' },
+  ]);
+  // A lens entry is projected, not copied: a field the CLI adds to one later
+  // stays out of the artifact until it is allowlisted.
+  const json = JSON.stringify(artifact);
+  assert.doesNotMatch(json, /globs|resolutionRef|internal/);
+});
+
+test('omits lenses entirely for a CLI that does not report them', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: { schemaVersion: 1, runId: 'run-1', approved: true },
+    },
+  });
+
+  // Absent rather than an empty array, so a consumer can tell "not reported"
+  // from "resolved no lenses".
+  assert.ok(!('lenses' in artifact.outcome));
+});
+
+test('distinguishes a run that resolved no lenses from one that reported none', () => {
+  const artifact = buildPublicArtifact({
+    result: { status: 'ok', outcome: { schemaVersion: 1, lenses: [] } },
+  });
+
+  assert.deepEqual(artifact.outcome.lenses, []);
+});
+
 test('drops an unexpected field from the outcome and the failure', () => {
   const artifact = buildPublicArtifact({
     result: {

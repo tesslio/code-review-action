@@ -39,15 +39,31 @@ is added to the allowlist and to this table.
 | Path | Fields |
 | --- | --- |
 | root | `schemaVersion`, `status`, `reason`, `outcome`, `failure`, `diagnostics`, `configuration`, `publication` |
-| `outcome` | `schemaVersion`, `runId`, `profileName`, `model`, `effort`, `judgement`, `approved`, `subject`, `findings`, `reconciliation` |
+| `outcome` | `schemaVersion`, `runId`, `profileName`, `model`, `effort`, `judgement`, `approved`, `subject`, `lenses`, `findings`, `reconciliation` |
 | `outcome.subject` | `schemaVersion`, `repository`, `change` |
 | `outcome.subject.change` | `baseRevision`, `headRevision`, `headKind` |
+| `outcome.lenses[]` | `ref`, `effort` |
 | `outcome.findings[]` | `id`, `title`, `body`, `severity`, `requiresChanges`, `disposition`, `lensRefs`, `reason`, `location`, and the flat location form `path`, `line`, `side` |
 | `outcome.findings[].location` | `path`, `line`, `side` |
 | `outcome.reconciliation[]` | `category`, `title`, `note`, `findingId`, `priorFindingId` |
 | `failure` | `kind`, `message` |
 | `diagnostics` | `durationMs` |
 | `configuration` | `profile`, `model`, `effort`, `lenses` |
+
+`outcome.lenses` reports the lens set the run was configured with, each entry
+carrying the reasoning effort that lens is configured to run at. A lens that
+sends none omits `effort`. Read it as configuration, not as a record of
+dispatch: a lens whose globs select nothing is listed here and skipped, so
+membership is not evidence the lens ran. Which lenses produced a given finding
+is recoverable from that finding's `lensRefs`.
+
+It is distinct from `configuration.lenses`, which echoes the `lenses` input's
+explicit selection. `outcome.lenses` describes what the run resolved, whether
+that came from the input, a profile, or the default.
+
+A CLI predating the field publishes no `lenses` key at all rather than an empty
+array, because the artifact omits absent fields. Treat an absent `lenses` as
+"not reported" and an empty array as "a run that resolved no lenses".
 
 `configuration.model` and `configuration.effort` record the resolved values the
 run used, normally the selected profile's. They are observability, not an input

@@ -26,6 +26,10 @@ const OUTCOME_FIELDS = [
 ];
 const SUBJECT_FIELDS = ['schemaVersion', 'repository'];
 const CHANGE_FIELDS = ['baseRevision', 'headRevision', 'headKind'];
+// Each entry is the effort a lens is configured to run at, not proof that it
+// ran: a lens whose globs select nothing is listed and skipped. Which lenses
+// produced findings is recoverable from each finding's `lensRefs`.
+const LENS_FIELDS = ['ref', 'effort'];
 // A finding carries its location either nested under `location` or flat on the
 // finding itself, and both forms are published so that neither loses it.
 const FINDING_FIELDS = [
@@ -85,6 +89,9 @@ function publicOutcome(outcome) {
     ...(outcome.subject === undefined
       ? {}
       : { subject: publicSubject(outcome.subject) }),
+    ...(Array.isArray(outcome.lenses)
+      ? { lenses: outcome.lenses.map((lens) => pick(lens, LENS_FIELDS)) }
+      : {}),
     ...(Array.isArray(outcome.findings)
       ? { findings: outcome.findings.map(publicFinding) }
       : {}),
