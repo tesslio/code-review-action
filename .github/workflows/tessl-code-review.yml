@@ -32,31 +32,59 @@ concurrency:
 
 jobs:
   review:
-    # Run when a pull request is opened, for an explicit dispatch, or for a
-    # comment on an open pull request whose body carries @tessl-code-review as a
-    # whole token, by an owner, an organization member, or an invited
-    # collaborator. The boundary checks stop @tessl-code-reviewer and similar
-    # from starting a privileged round.
+    # Run for an opened pull request, an explicit dispatch, or a comment on an
+    # open pull request by an owner, an organization member, or an invited
+    # collaborator. Whether such a comment actually mentions @tessl-code-review
+    # as a whole token is decided by the mention-gate step below, because a
+    # GitHub Actions expression cannot match a token boundary reliably
+    # (\n in an expression literal is a backslash and an n, not a line feed,
+    # and there is no regex or tab literal), so parsing the body here would
+    # miss real newlines, tabs, and other delimiters.
     if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
         github.event.issue.pull_request != null &&
         github.event.issue.state == 'open' &&
-        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
-        (github.event.comment.body == '@tessl-code-review' ||
-          startsWith(github.event.comment.body, '@tessl-code-review ') ||
-          contains(github.event.comment.body, '@tessl-code-review\n') ||
-          contains(github.event.comment.body, ' @tessl-code-review ') ||
-          endsWith(github.event.comment.body, ' @tessl-code-review')))
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # For an issue_comment event, decide whether the body mentions
+      # @tessl-code-review as a whole token. grep sees real whitespace and
+      # delimiters, so a mention after a line break or a tab counts, while
+      # @tessl-code-reviewer and other longer handles do not: the token must be
+      # bounded by the start/end of a line or a non-[[:alnum:]_-] character.
+      # The match is case-insensitive, and grep scans line by line so the
+      # mention counts wherever it appears in the body. The POSIX ERE pattern
+      # (grep -E) runs on the stock runner grep without relying on PCRE.
+      # Non-comment events set mention=skip so the action step's condition
+      # falls through to the event-name checks.
+      - id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "issue_comment" ]]; then
+            echo "mention=skip" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s' "$COMMENT_BODY" \
+            | grep -qiE '(^|[^[:alnum:]_-])@tessl-code-review([^[:alnum:]_-]|$)'; then
+            echo "mention=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "mention=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # Pinned to a full commit SHA, resolved from the current supported Tessl
       # Code Review release when this workflow was written, and changed only as
       # a reviewed update. The Action checks out the pull-request head itself,
-      # so this job needs no checkout step.
-      - uses: tesslio/code-review-action@c6c5070082b1a578993552756e22fe0fef58015b # v1.1.0
+      # so this job needs no checkout step. Runs for a pull_request or dispatch
+      # event, or for an issue_comment the mention-gate step confirmed.
+      - if: github.event_name != 'issue_comment' || steps.gate.outputs.mention == 'true'
+        uses: tesslio/code-review-action@c6c5070082b1a578993552756e22fe0fef58015b # v1.1.0
         with:
           tessl-token: ${{ secrets.TESSL_TOKEN }}
           # Named review profile. The standard profile is the supported default.
