@@ -3,7 +3,7 @@
 import { appendFile } from 'node:fs/promises';
 
 import { checkRunReport, concludeReviewCheckRun } from './check-run.mjs';
-import { reviewConclusion } from './conclusion.mjs';
+import { isCompletedPublication, reviewConclusion } from './conclusion.mjs';
 import { optionalPositiveIntegerEnv, requiredEnv } from './env.mjs';
 import { removeFailureNotices } from './failure-notice.mjs';
 import { GitHubCodeReviewApi } from './github-api.mjs';
@@ -35,6 +35,10 @@ async function concludeCheckRun(status) {
 /**
  * Clear notices left by earlier failed runs once a run has completed.
  *
+ * Completion, not approval: a gate that publishes requested changes exits
+ * non-zero by design, and so does the policy fallback, but both reached the
+ * pull request — a notice saying the review did not complete would be false.
+ *
  * Best effort: the review is done either way, and a stale notice is worth a
  * warning rather than a failed job. This is the one piece of publication that
  * stays here, because the notice it clears is also published here.
@@ -52,16 +56,19 @@ async function clearStaleFailureNotices() {
 }
 
 let conclusion;
+let reviewResult;
 try {
   const result =
     process.env.REVIEW_EXIT_CODE === '0' ||
     process.env.REVIEW_OUTPUT !== undefined
       ? await readReviewResult(requiredEnv('REVIEW_OUTPUT'))
       : undefined;
+  reviewResult = result;
   conclusion = reviewConclusion({
     mode,
     reviewExitCode: process.env.REVIEW_EXIT_CODE,
     result,
+    headSha: process.env.HEAD_SHA,
   });
 } catch (error) {
   if (!(error instanceof ResultFileError)) {
@@ -85,7 +92,12 @@ if (conclusion.status === 'superseded') {
   );
 }
 
-if (conclusion.exitCode === 0) await clearStaleFailureNotices();
+if (
+  conclusion.status === 'skipped-no-matching-lenses' ||
+  isCompletedPublication(reviewResult?.publication)
+) {
+  await clearStaleFailureNotices();
+}
 
 // The check run carries the computed status even when the step output cannot
 // be written, and that write still fails the step afterwards.

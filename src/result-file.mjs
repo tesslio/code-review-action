@@ -43,11 +43,38 @@ export function isNoMatchingLensesResult(result) {
 }
 
 /**
+ * The published fields of the CLI's publication receipt, named one by one.
+ *
+ * Projected rather than passed through for the same reason every other section
+ * of the artifact is: a field the CLI adds later stays out until it is added
+ * here and to the documented schema, so no new CLI output reaches an artifact
+ * reader without that decision being made.
+ */
+const RECEIPT_FIELDS = [
+  'status',
+  'reviewId',
+  'intendedEvent',
+  'publishedEvent',
+  'inlineCount',
+  'unplacedCount',
+  'reviewedHeadSha',
+  'currentHeadSha',
+];
+
+/**
  * What the CLI reported it did with the review on the pull request, or
  * `undefined` when it published nothing. The CLI owns publication, so this is
  * read from its result rather than produced here.
  */
 export function publicationReceipt(result) {
   const publication = result?.publication;
-  return typeof publication?.status === 'string' ? publication : undefined;
+  if (typeof publication?.status !== 'string') return undefined;
+  const projected = {};
+  for (const field of RECEIPT_FIELDS) {
+    const value = publication[field];
+    if (typeof value === 'string' || typeof value === 'number') {
+      projected[field] = value;
+    }
+  }
+  return projected;
 }

@@ -243,6 +243,30 @@ test('publishes a finding that carries its location flat on the finding', () => 
   });
 });
 
+test('projects the publication receipt onto the documented fields', () => {
+  // The receipt is CLI-controlled, so it goes through the same allowlist as
+  // every other section: a field added later stays out of the artifact until
+  // it is added here deliberately.
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: { approved: true },
+      publication: {
+        status: 'published',
+        reviewId: 7,
+        inlineCount: 2,
+        debugTranscript: 'reviewed source and prompts',
+        nested: { credential: 'secret' },
+      },
+    },
+  });
+  assert.deepEqual(artifact.publication, {
+    status: 'published',
+    reviewId: 7,
+    inlineCount: 2,
+  });
+});
+
 test('records a structured CLI failure without requiring publication', () => {
   const artifact = buildPublicArtifact({
     result: {

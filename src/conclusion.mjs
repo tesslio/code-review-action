@@ -1,6 +1,29 @@
 import { isNoMatchingLensesResult } from './result-file.mjs';
 
 /**
+ * The receipt statuses that mean the review reached its pull request. Named
+ * rather than inferred from the absence of the failure cases: the CLI is no
+ * longer pinned by this Action, so it can report a status this revision has
+ * never heard of, and an unrecognised one must not read as a published review.
+ */
+const PUBLISHED_STATUSES = new Set(['published', 'reused']);
+
+/** Every receipt status this revision understands, successful or not. */
+const KNOWN_STATUSES = new Set([
+  ...PUBLISHED_STATUSES,
+  'superseded',
+  'published-with-policy-fallback',
+]);
+
+/** Whether the run reached a terminal state that published or deliberately did not. */
+export function isCompletedPublication(publication) {
+  return (
+    PUBLISHED_STATUSES.has(publication?.status) ||
+    publication?.status === 'published-with-policy-fallback'
+  );
+}
+
+/**
  * Map a completed run onto the terminal status the check run reports and the
  * exit code the job takes.
  *
@@ -12,25 +35,38 @@ import { isNoMatchingLensesResult } from './result-file.mjs';
  * — it carries the outcome when the review succeeded, and the receipt when
  * publication did.
  */
-export function reviewConclusion({ mode, reviewExitCode, result }) {
+export function reviewConclusion({ mode, reviewExitCode, result, headSha }) {
   if (mode !== 'advisory' && mode !== 'gate') {
     throw new Error('mode must be advisory or gate.');
   }
-  if (isNoMatchingLensesResult(result)) {
-    return { status: 'skipped-no-matching-lenses', exitCode: 0 };
-  }
 
-  const publication = result?.publication;
   const reviewSucceeded = reviewExitCode === '0';
 
-  // A run that exited non-zero having still produced an outcome failed to
-  // publish, not to review. Reporting it as a technical failure would send a
-  // maintainer looking at the review instead of at the permission or the head
-  // that actually stopped it.
+  // Checked before anything the result claims: a record written by a run that
+  // then failed describes an invocation that did not finish, and reading it as
+  // a terminal success would conclude the check run green and clear the notice
+  // saying otherwise.
   if (!reviewSucceeded) {
     return result?.status === 'ok' && result?.outcome !== undefined
       ? { status: 'publication-failure', exitCode: 1 }
       : { status: 'technical-failure', exitCode: 1 };
+  }
+
+  if (isNoMatchingLensesResult(result)) {
+    return { status: 'skipped-no-matching-lenses', exitCode: 0 };
+  }
+
+  // The check run is attached to the head this Action resolved and checked out,
+  // so a verdict for any other revision must not conclude it. The CLI resolves
+  // the pull request itself and can legitimately review a newer head; that head
+  // simply is not the one under check here.
+  const reviewedHead = result?.outcome?.subject?.change?.headRevision;
+  if (
+    headSha !== undefined &&
+    reviewedHead !== undefined &&
+    reviewedHead !== headSha
+  ) {
+    return { status: 'superseded', exitCode: 1 };
   }
 
   // Only a boolean verdict decides a gate. An absent one establishes nothing
@@ -40,9 +76,8 @@ export function reviewConclusion({ mode, reviewExitCode, result }) {
     return { status: 'gate-verdict-failure', exitCode: 1 };
   }
 
-  // The review succeeded and was asked to publish, so a missing receipt means
-  // the publication never reported a terminal state.
-  if (publication === undefined) {
+  const publication = result?.publication;
+  if (!KNOWN_STATUSES.has(publication?.status)) {
     return { status: 'publication-failure', exitCode: 1 };
   }
   if (publication.status === 'superseded') {

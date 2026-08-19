@@ -83,6 +83,45 @@ test('forwards supplied model and effort overrides', async () => {
   );
 });
 
+test('exports a review id only for a receipt naming a published review', async () => {
+  const outputsFor = async (publication) => {
+    const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
+    const executable = join(directory, 'tessl');
+    const outputs = join(directory, 'outputs');
+    await writeFile(
+      executable,
+      `#!/usr/bin/env bash\ncat <<'JSON'\n${JSON.stringify({ status: 'ok', publication })}\nJSON\n`,
+      { mode: 0o755 },
+    );
+    await writeFile(outputs, '');
+    await run('bash', [script], {
+      env: {
+        PATH: `${directory}:${process.env.PATH}`,
+        RUNNER_TEMP: directory,
+        GITHUB_OUTPUT: outputs,
+        PR_NUMBER: '42',
+        PROFILE: 'standard',
+        MODE: 'advisory',
+        MODEL: '',
+        EFFORT: '',
+        LENSES: '',
+        HEAD_SHA: 'head',
+      },
+    });
+    const written = await readFile(outputs, 'utf8');
+    await rm(directory, { recursive: true, force: true });
+    return written;
+  };
+
+  assert.match(await outputsFor({ status: 'published', reviewId: 7 }), /review-id=7/);
+  assert.match(await outputsFor({ status: 'reused', reviewId: 8 }), /review-id=8/);
+  // A superseded publication has no review on the pull request to point at.
+  assert.doesNotMatch(
+    await outputsFor({ status: 'superseded', reviewId: 9 }),
+    /review-id=/,
+  );
+});
+
 test('gate mode publishes the verdict the review reached', async () => {
   // The flag carries a value rather than being a boolean because the verdict
   // does not exist until the review has run, so the CLI resolves it.

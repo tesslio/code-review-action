@@ -57,9 +57,15 @@ if [[ "$code" == "0" ]] && jq -e '.status? == "skipped" and .reason? == "no-matc
 fi
 
 # The published review's identifier, read back from the CLI's receipt so the
-# Action's declared output survives publication moving into the CLI. Absent
-# whenever nothing was published, which is not an error here.
-review_id="$(jq -r '.publication.reviewId // empty' "$result_path" 2>/dev/null || true)"
+# Action's declared output survives publication moving into the CLI. Exported
+# only for a receipt that names a review actually on the pull request: a
+# superseded or failed publication carries no review to point at, and the
+# identifier is checked rather than trusted because the CLI version producing it
+# is the caller's to choose.
+review_id="$(jq -r '
+  select(.publication.status == "published" or .publication.status == "reused")
+  | .publication.reviewId // empty
+' "$result_path" 2>/dev/null || true)"
 if [[ "$review_id" =~ ^[1-9][0-9]*$ ]]; then
   echo "review-id=${review_id}" >> "$GITHUB_OUTPUT"
 fi
