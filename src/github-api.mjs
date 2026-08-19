@@ -195,7 +195,10 @@ export class GitHubCodeReviewApi {
     );
   }
 
-  /** React to a comment, which the caller names as one kind or the other. */
+  /**
+   * React to a comment. `kind` is `'issue-comment'` for a conversation comment
+   * or `'review-comment'` for an inline review comment; any other value throws.
+   */
   addCommentReaction({ kind, commentId, content }) {
     const collection = REACTION_COLLECTIONS.get(kind);
     if (collection === undefined) {
