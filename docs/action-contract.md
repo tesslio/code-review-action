@@ -9,6 +9,7 @@ The supported entry point is `action.yml`.
 | `tessl-token` | yes | Authenticates the Tessl CLI. |
 | `profile` | no | Named review profile or repository `.yml` or `.yaml` profile path. Defaults to `standard`; file profiles are not discovered automatically. |
 | `lenses` | no | JSON array containing the complete ordered lens selection, at most 8 entries. Empty uses profile defaults. |
+| `effort` | no | Reasoning effort for every review lens: `low`, `medium` or `high`. Overrides any effort the profile sets, including a per-lens one. Empty sends none, leaving the installed CLI to resolve it from the profile and the model's own default. A value outside the three is rejected before the review starts. |
 | `mode` | no | `advisory` or `gate`. Defaults to `advisory`. |
 | `pr-number` | no | Open pull-request number for an event without pull-request context. |
 | `cli-version` | no | Tessl CLI version to install. Defaults to `latest`, which tracks the current release; set an exact version to fix the CLI alongside the Action's own commit SHA. The selected release must publish a review and report the revision it reviewed; one that does not concludes `incompatible-cli`. |
