@@ -18,6 +18,7 @@ async function finalize({
   publication = { status: 'published' },
   reviewExitCode = '0',
   prNumber = '42',
+  headSha,
   writableOutputs = true,
 }) {
   const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
@@ -48,6 +49,7 @@ async function finalize({
           MODE: mode,
           REVIEW_EXIT_CODE: reviewExitCode,
           PR_NUMBER: prNumber,
+          ...(headSha === undefined ? {} : { HEAD_SHA: headSha }),
           REVIEW_OUTPUT: join(directory, 'result.json'),
           GITHUB_OUTPUT: writableOutputs
             ? outputs
@@ -170,5 +172,20 @@ test('a nonzero CLI invocation keeps its notice despite a published receipt', as
     reviewExitCode: '1',
   });
   assert.match(outputs, /status=publication-failure/);
+  assert.doesNotMatch(requests, /\/issues\/42\/comments/);
+});
+
+test('a verdict for another commit keeps the notice that says so', async () => {
+  // Concluded superseded, so the run did not complete a review for this head
+  // even though the CLI exited zero with a published receipt.
+  const { outputs, requests } = await finalize({
+    result: JSON.stringify({
+      status: 'ok',
+      outcome: { approved: true, subject: { change: { headRevision: 'other' } } },
+      publication: { status: 'published' },
+    }),
+    headSha: 'expected',
+  });
+  assert.match(outputs, /status=superseded/);
   assert.doesNotMatch(requests, /\/issues\/42\/comments/);
 });

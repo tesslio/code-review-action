@@ -37,6 +37,11 @@ publish for a superseded head. What this Action still owes:
 
 - Refuse to run a CLI that cannot publish, before the review starts, rather than
   discovering it at argument parsing.
+- Conclude the check run only for a result that names the reviewed revision, and
+  only when it is the head this Action resolved. A result that names another
+  revision is `superseded`; one that names none is `incompatible-cli`. Neither
+  concludes a verdict, because the identity the check run asserts cannot be
+  established without it.
 - Report the check run against the resolved reviewed head only, and never
   assert a verdict for a head that was not reviewed.
 - Treat check-run reporting as optional. A missing permission produces a

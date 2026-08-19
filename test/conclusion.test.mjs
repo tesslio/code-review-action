@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { reviewConclusion } from '../src/conclusion.mjs';
+import {
+  COMPLETED_REVIEW_STATUSES,
+  reviewConclusion,
+} from '../src/conclusion.mjs';
 
 /**
  * The CLI reports the review and what it did with it in one document, so a
@@ -173,11 +176,13 @@ test('a verdict for another revision cannot conclude this head', () => {
 
 test('a verdict that names no revision cannot conclude this head either', () => {
   // Passing a gate on an outcome that identifies no commit would assert a
-  // verdict for a revision nothing named.
-  assert.deepEqual(
-    reviewConclusion(valid({ mode: 'gate', headSha: 'aaa' })),
-    { status: 'superseded', exitCode: 1 },
-  );
+  // verdict for a revision nothing named. Reported as an incompatible CLI
+  // rather than a superseded head: nothing was pushed, the CLI simply never
+  // said what it reviewed, and the caller chooses that CLI.
+  assert.deepEqual(reviewConclusion(valid({ mode: 'gate', headSha: 'aaa' })), {
+    status: 'incompatible-cli',
+    exitCode: 1,
+  });
 });
 
 test('an unrecognised receipt status fails closed', () => {
@@ -208,4 +213,27 @@ test('technical, publication and stale-head failures have stable statuses', () =
     reviewConclusion(valid({ publication: { status: 'superseded' } })),
     { status: 'superseded', exitCode: 1 },
   );
+});
+
+test('only a completed review clears a stale failure notice', () => {
+  // One condition covers every way a run fails to complete, and keeps the two
+  // that complete while concluding non-zero.
+  for (const status of [
+    'approved',
+    'advisory-findings',
+    'changes-requested',
+    'gate-configuration-failure',
+    'skipped-no-matching-lenses',
+  ]) {
+    assert.ok(COMPLETED_REVIEW_STATUSES.has(status), status);
+  }
+  for (const status of [
+    'technical-failure',
+    'publication-failure',
+    'superseded',
+    'gate-verdict-failure',
+    'incompatible-cli',
+  ]) {
+    assert.ok(!COMPLETED_REVIEW_STATUSES.has(status), status);
+  }
 });

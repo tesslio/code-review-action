@@ -1,16 +1,25 @@
 import {
   KNOWN_RECEIPT_STATUSES,
-  PUBLISHED_STATUSES,
   isNoMatchingLensesResult,
 } from './result-file.mjs';
 
-/** Whether the run reached a terminal state that published or deliberately did not. */
-export function isCompletedPublication(publication) {
-  return (
-    PUBLISHED_STATUSES.has(publication?.status) ||
-    publication?.status === 'published-with-policy-fallback'
-  );
-}
+/**
+ * The terminal statuses that mean a review completed for the head under check.
+ *
+ * Completion is not approval and it is not a receipt. A gate publishing
+ * requested changes concludes non-zero and completed; a run whose CLI wrote a
+ * published receipt and then failed did not; and neither did one whose verdict
+ * turned out to name a different commit. Naming the completed states directly is
+ * what lets one condition cover all three, and they cannot drift from the
+ * statuses above because they are the same values.
+ */
+export const COMPLETED_REVIEW_STATUSES = new Set([
+  'approved',
+  'advisory-findings',
+  'changes-requested',
+  'gate-configuration-failure',
+  'skipped-no-matching-lenses',
+]);
 
 /**
  * Map a completed run onto the terminal status the check run reports and the
@@ -53,7 +62,13 @@ export function reviewConclusion({ mode, reviewExitCode, result, headSha }) {
   // closed, so equality with the resolved head is the only way through.
   const reviewedHead = result?.outcome?.subject?.change?.headRevision;
   if (headSha !== undefined && reviewedHead !== headSha) {
-    return { status: 'superseded', exitCode: 1 };
+    // A CLI that publishes but never reports the revision it reviewed cannot
+    // satisfy this, and saying "superseded" would send a maintainer looking for
+    // a push that never happened. The caller chooses the CLI version, so the
+    // incompatibility is theirs to fix and the status has to name it.
+    return reviewedHead === undefined
+      ? { status: 'incompatible-cli', exitCode: 1 }
+      : { status: 'superseded', exitCode: 1 };
   }
 
   // Only a boolean verdict decides a gate. An absent one establishes nothing

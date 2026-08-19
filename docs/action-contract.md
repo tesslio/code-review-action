@@ -11,7 +11,7 @@ The supported entry point is `action.yml`.
 | `lenses` | no | JSON array containing the complete ordered lens selection, at most 8 entries. Empty uses profile defaults. |
 | `mode` | no | `advisory` or `gate`. Defaults to `advisory`. |
 | `pr-number` | no | Open pull-request number for an event without pull-request context. |
-| `cli-version` | no | Tessl CLI version to install. Defaults to `latest`, which tracks the current release; set an exact version to fix the CLI alongside the Action's own commit SHA. |
+| `cli-version` | no | Tessl CLI version to install. Defaults to `latest`, which tracks the current release; set an exact version to fix the CLI alongside the Action's own commit SHA. The selected release must publish a review and report the revision it reviewed; one that does not concludes `incompatible-cli`. |
 
 ## Outputs
 
@@ -195,6 +195,7 @@ with the terminal status:
 | `publication-failure` | failure | neutral |
 | `gate-configuration-failure` | failure | not reachable, neutral |
 | `gate-verdict-failure` | failure | not reachable, neutral |
+| `incompatible-cli` | failure | neutral |
 | `superseded` | neutral | neutral |
 | `skipped-no-matching-lenses` | neutral | neutral |
 

@@ -3,7 +3,10 @@
 import { appendFile } from 'node:fs/promises';
 
 import { checkRunReport, concludeReviewCheckRun } from './check-run.mjs';
-import { isCompletedPublication, reviewConclusion } from './conclusion.mjs';
+import {
+  COMPLETED_REVIEW_STATUSES,
+  reviewConclusion,
+} from './conclusion.mjs';
 import { optionalPositiveIntegerEnv, requiredEnv } from './env.mjs';
 import { removeFailureNotices } from './failure-notice.mjs';
 import { GitHubCodeReviewApi } from './github-api.mjs';
@@ -35,17 +38,11 @@ async function concludeCheckRun(status) {
 /**
  * Clear notices left by earlier failed runs once a run has completed.
  *
- * Two constraints have to hold together, and each rules out the obvious key.
- * Completion is not approval: a gate publishing requested changes concludes
- * non-zero by design, and so does the policy fallback, but both reached the
- * pull request, so keying on this Action's exit code would leave a false
- * "did not complete" notice on a review that did. And a receipt is not
- * completion either: a CLI can write a published receipt and still exit
- * non-zero afterwards, and clearing then would delete the notice posted for
- * that very failure.
- *
- * So both are required — the CLI invocation finished, and it reached a
- * terminal state that published or deliberately did not.
+ * Keyed on the terminal status, which is the one value that already accounts
+ * for every way a run can fail to complete: a non-zero CLI invocation, a
+ * receipt that never reached a terminal state, and a verdict naming another
+ * commit all conclude as something outside the completed set, while requested
+ * changes and the policy fallback stay inside it despite concluding non-zero.
  *
  * Best effort: the review is done either way, and a stale notice is worth a
  * warning rather than a failed job. This is the one piece of publication that
@@ -64,14 +61,12 @@ async function clearStaleFailureNotices() {
 }
 
 let conclusion;
-let reviewResult;
 try {
   const result =
     process.env.REVIEW_EXIT_CODE === '0' ||
     process.env.REVIEW_OUTPUT !== undefined
       ? await readReviewResult(requiredEnv('REVIEW_OUTPUT'))
       : undefined;
-  reviewResult = result;
   conclusion = reviewConclusion({
     mode,
     reviewExitCode: process.env.REVIEW_EXIT_CODE,
@@ -100,11 +95,7 @@ if (conclusion.status === 'superseded') {
   );
 }
 
-if (
-  process.env.REVIEW_EXIT_CODE === '0' &&
-  (conclusion.status === 'skipped-no-matching-lenses' ||
-    isCompletedPublication(reviewResult?.publication))
-) {
+if (COMPLETED_REVIEW_STATUSES.has(conclusion.status)) {
   await clearStaleFailureNotices();
 }
 
