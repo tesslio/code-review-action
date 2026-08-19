@@ -1,8 +1,16 @@
 import { withAiSystemNotice } from './ai-notice.mjs';
 
+const API_ORIGIN = 'https://api.github.com';
 const API_VERSION = '2022-11-28';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRY_DELAYS_MS = [250, 1_000];
+/**
+ * A ceiling on the wait GitHub asks for. A secondary rate limit typically asks
+ * for a minute, which is worth waiting inside a review job; a primary limit can
+ * ask for the rest of the hour, which is not, and failing fast leaves a run
+ * someone can read instead of one that looks hung.
+ */
+const MAX_HONOURED_RETRY_AFTER_MS = 60_000;
 // Conversation comments and inline review comments are different resources with
 // separate reaction endpoints and separate id spaces, so a kind this map does
 // not name cannot be guessed at: the wrong endpoint would address a different
@@ -30,6 +38,40 @@ function isRetryableResponse(response) {
     response.headers.get('retry-after') !== null ||
     response.headers.get('x-ratelimit-remaining') === '0'
   );
+}
+
+/**
+ * The delay before the next attempt: what the response asks for when it says so
+ * and the number is usable, otherwise this attempt's own backoff. Ignoring the
+ * header is what turns one throttled request into a throttled job.
+ */
+function retryDelayMs(response, fallbackMs) {
+  const requestedSeconds = Number(response.headers.get('retry-after'));
+  if (!Number.isFinite(requestedSeconds) || requestedSeconds <= 0) {
+    return fallbackMs;
+  }
+  return Math.min(requestedSeconds * 1_000, MAX_HONOURED_RETRY_AFTER_MS);
+}
+
+/**
+ * The path of the next page a `Link` header points at, or `undefined` when it
+ * points at none. A link to another origin is ignored rather than followed.
+ */
+function nextPagePath(linkHeader) {
+  if (!linkHeader) return undefined;
+  for (const entry of linkHeader.split(',')) {
+    const match = /^\s*<([^>]+)>\s*;\s*rel="?next"?/.exec(entry);
+    if (match === null) continue;
+    let url;
+    try {
+      url = new URL(match[1]);
+    } catch {
+      return undefined;
+    }
+    if (url.origin !== API_ORIGIN) return undefined;
+    return `${url.pathname}${url.search}`;
+  }
+  return undefined;
 }
 
 export class GitHubApiError extends Error {
@@ -66,12 +108,20 @@ export class GitHubCodeReviewApi {
     };
   }
 
-  async request(path, { method = 'GET', body } = {}) {
+  async request(path, options) {
+    return (await this.requestWithHeaders(path, options)).body;
+  }
+
+  /**
+   * Used where a response's headers carry part of the answer, pagination above
+   * all; every other call site wants {@link request} and its parsed body.
+   */
+  async requestWithHeaders(path, { method = 'GET', body } = {}) {
     for (let attempt = 0; ; attempt++) {
       const canRetry = method !== 'POST';
       let response;
       try {
-        response = await this.fetchImpl(`https://api.github.com${path}`, {
+        response = await this.fetchImpl(`${API_ORIGIN}${path}`, {
           method,
           headers: {
             ...this.headers,
@@ -89,75 +139,45 @@ export class GitHubCodeReviewApi {
       }
       const text = await response.text();
       if (response.ok) {
-        return text.length === 0 ? undefined : JSON.parse(text);
+        return {
+          body: text.length === 0 ? undefined : JSON.parse(text),
+          headers: response.headers,
+        };
       }
       if (
         attempt < this.retryDelaysMs.length &&
         canRetry &&
         isRetryableResponse(response)
       ) {
-        await this.sleep(this.retryDelaysMs[attempt]);
+        await this.sleep(retryDelayMs(response, this.retryDelaysMs[attempt]));
         continue;
       }
       throw new GitHubApiError(method, path, response.status, text);
     }
   }
 
+  /**
+   * Collect every page, following GitHub's own `next` link rather than guessing
+   * from a batch size: a short page is not proof of the last page, and some
+   * endpoints and filters return one with a `next` link still set.
+   */
   async paginate(path) {
     const all = [];
-    for (let page = 1; ; page++) {
-      const separator = path.includes('?') ? '&' : '?';
-      const batch = await this.request(
-        `${path}${separator}per_page=100&page=${page}`,
-      );
-      if (!Array.isArray(batch)) {
+    const separator = path.includes('?') ? '&' : '?';
+    let next = `${path}${separator}per_page=100`;
+    while (next !== undefined) {
+      const { body, headers } = await this.requestWithHeaders(next);
+      if (!Array.isArray(body)) {
         throw new Error(`GitHub pagination returned a non-array for ${path}.`);
       }
-      all.push(...batch);
-      if (batch.length < 100) return all;
+      all.push(...body);
+      next = nextPagePath(headers.get('link'));
     }
+    return all;
   }
 
   pullRequest(number) {
     return this.request(`/repos/${this.repository}/pulls/${number}`);
-  }
-
-  files(number) {
-    return this.paginate(`/repos/${this.repository}/pulls/${number}/files`);
-  }
-
-  reviews(number) {
-    return this.paginate(`/repos/${this.repository}/pulls/${number}/reviews`);
-  }
-
-  reviewComments(number) {
-    return this.paginate(`/repos/${this.repository}/pulls/${number}/comments`);
-  }
-
-  createReview(number, payload) {
-    const noticed = {
-      ...payload,
-      body: withAiSystemNotice(payload.body),
-      ...(payload.comments === undefined
-        ? {}
-        : {
-            comments: payload.comments.map((comment) => ({
-              ...comment,
-              body: withAiSystemNotice(comment.body),
-            })),
-          }),
-    };
-    return this.request(`/repos/${this.repository}/pulls/${number}/reviews`, {
-      method: 'POST',
-      body: noticed,
-    });
-  }
-
-  reply(number, rootCommentId, body) {
-    return this.request(
-      `/repos/${this.repository}/pulls/${number}/comments/${rootCommentId}/replies`,
-      { method: 'POST', body: { body: withAiSystemNotice(body) } },
-    );
   }
 
   createCheckRun(payload) {

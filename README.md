@@ -201,9 +201,9 @@ Gate mode connects the review outcome to the check result:
 - An approved review attempts to approve the pull request and succeeds.
 - A review that requires changes attempts to request changes, publishes the
   complete review, and fails the check.
-- If GitHub does not permit the requested review event, the Action publishes
-  the completed review as a comment, explains the repository configuration
-  problem, and fails the check.
+- If GitHub does not permit the requested review event, the completed review is
+  published as a comment instead, and the Action explains the repository
+  configuration problem and fails the check.
 - If the review returns no approval verdict, the gate is not established and
   the check fails. Only a boolean verdict approves a commit, so a missing or
   malformed one fails closed rather than passing the commit through. Such an
@@ -246,8 +246,8 @@ pull-request comment.
 
 ### Superseded runs
 
-If the pull-request head moves while the review is running, the Action publishes
-nothing for the head it reviewed. The job fails with exit code 1 so that an
+If the pull-request head moves while the review is running, nothing is published
+for the head that was reviewed. The job fails with exit code 1 so that an
 unpublished review cannot read as a completed one, the `status` output is
 `superseded`, and the check concludes neutral in both modes because the reviewed
 head got no verdict and the commit that replaced it was never judged. The
