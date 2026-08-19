@@ -4,7 +4,11 @@
 
 - Pull-request code, diffs, branches, comments, titles, and repository files are
   untrusted input.
-- The pinned Action revision and pinned dependencies are trusted code.
+- The pinned Action revision is trusted code.
+- The Tessl CLI is trusted code, and is **not** pinned by this Action: callers
+  track the current release by default. Pinning the Action's commit SHA
+  therefore fixes this Action's behaviour, not the CLI's. A caller that needs
+  both fixed sets `cli-version` to an exact release.
 - GitHub and Tessl responses are validated at their contracts.
 
 ## Required controls
@@ -26,10 +30,18 @@
 
 ### Publication integrity
 
-- Verify the pull-request head immediately before publication.
-- Use stable markers and receipts for idempotent retries.
-- Reconcile an ambiguous create response before another publication attempt.
-- Do not publish a review for a superseded head.
+Publication belongs to the CLI, and so do the controls that protect it: head
+verification before every create, stable markers for idempotent retries,
+reconciliation of an ambiguous create before another attempt, and refusing to
+publish for a superseded head. What this Action still owes:
+
+- Refuse to run a CLI that cannot publish, before the review starts, rather than
+  discovering it at argument parsing.
+- Conclude the check run only for a result that names the reviewed revision, and
+  only when it is the head this Action resolved. A result that names another
+  revision is `superseded`; one that names none is `incompatible-cli`. Neither
+  concludes a verdict, because the identity the check run asserts cannot be
+  established without it.
 - Report the check run against the resolved reviewed head only, and never
   assert a verdict for a head that was not reviewed.
 - Treat check-run reporting as optional. A missing permission produces a

@@ -1,40 +1,91 @@
-import { isNoMatchingLensesResult } from './protocol.mjs';
+import {
+  KNOWN_RECEIPT_STATUSES,
+  isNoMatchingLensesResult,
+} from './result-file.mjs';
 
-export function reviewConclusion({
-  mode,
-  reviewExitCode,
-  publishExitCode,
-  result,
-  publication,
-}) {
+/**
+ * The terminal statuses that mean a review completed for the head under check.
+ *
+ * Completion is not approval and it is not a receipt. A gate publishing
+ * requested changes concludes non-zero and completed; a run whose CLI wrote a
+ * published receipt and then failed did not; and neither did one whose verdict
+ * turned out to name a different commit. Naming the completed states directly is
+ * what lets one condition cover all three, and they cannot drift from the
+ * statuses above because they are the same values.
+ */
+export const COMPLETED_REVIEW_STATUSES = new Set([
+  'approved',
+  'advisory-findings',
+  'changes-requested',
+  'gate-configuration-failure',
+  'skipped-no-matching-lenses',
+]);
+
+/**
+ * Map a completed run onto the terminal status the check run reports and the
+ * exit code the job takes.
+ *
+ * The CLI both reviews and publishes, and reports one exit code for the pair.
+ * So a non-zero exit alone cannot say which failed, and the two are not
+ * equivalent: a review that never produced an outcome is a technical failure,
+ * while a review that completed and could not be published is a publication
+ * failure the author can often fix. The result document is what separates them
+ * — it carries the outcome when the review succeeded, and the receipt when
+ * publication did.
+ */
+export function reviewConclusion({ mode, reviewExitCode, result, headSha }) {
   if (mode !== 'advisory' && mode !== 'gate') {
     throw new Error('mode must be advisory or gate.');
   }
-  if (reviewExitCode !== '0') {
-    return { status: 'technical-failure', exitCode: 1 };
+
+  const reviewSucceeded = reviewExitCode === '0';
+
+  // Checked before anything the result claims: a record written by a run that
+  // then failed describes an invocation that did not finish, and reading it as
+  // a terminal success would conclude the check run green and clear the notice
+  // saying otherwise.
+  if (!reviewSucceeded) {
+    return result?.status === 'ok' && result?.outcome !== undefined
+      ? { status: 'publication-failure', exitCode: 1 }
+      : { status: 'technical-failure', exitCode: 1 };
   }
+
   if (isNoMatchingLensesResult(result)) {
     return { status: 'skipped-no-matching-lenses', exitCode: 0 };
   }
-  // Only a boolean verdict decides a gate. An absent verdict, or a value such
-  // as the string "false" that a truthiness test would accept, establishes
-  // nothing about the reviewed head, so gate mode fails closed instead of
-  // passing the head through. A verdict this malformed also stops publication,
-  // and it is checked before the publication result so that the status names
-  // the missing verdict rather than its effect.
+
+  // The check run is attached to the head this Action resolved and checked out,
+  // so it can only be concluded by a verdict that identifies that exact
+  // revision. A different one is a head the CLI resolved for itself and is not
+  // the one under check; an absent one establishes nothing at all, and passing
+  // a gate on it would assert a verdict for a commit nothing named. Both fail
+  // closed, so equality with the resolved head is the only way through.
+  const reviewedHead = result?.outcome?.subject?.change?.headRevision;
+  if (headSha !== undefined && reviewedHead !== headSha) {
+    // A CLI that publishes but never reports the revision it reviewed cannot
+    // satisfy this, and saying "superseded" would send a maintainer looking for
+    // a push that never happened. The caller chooses the CLI version, so the
+    // incompatibility is theirs to fix and the status has to name it.
+    return reviewedHead === undefined
+      ? { status: 'incompatible-cli', exitCode: 1 }
+      : { status: 'superseded', exitCode: 1 };
+  }
+
+  // Only a boolean verdict decides a gate. An absent one establishes nothing
+  // about the reviewed head, so gate mode fails closed rather than passing it.
   const approved = result?.outcome?.approved;
   if (mode === 'gate' && typeof approved !== 'boolean') {
     return { status: 'gate-verdict-failure', exitCode: 1 };
   }
-  // A publication that failed for any other reason published nothing, so a
-  // verdict it carried decides nothing either.
-  if (publishExitCode !== '0') {
+
+  const publication = result?.publication;
+  if (!KNOWN_RECEIPT_STATUSES.has(publication?.status)) {
     return { status: 'publication-failure', exitCode: 1 };
   }
-  if (publication?.status === 'superseded') {
+  if (publication.status === 'superseded') {
     return { status: 'superseded', exitCode: 1 };
   }
-  if (publication?.status === 'published-with-policy-fallback') {
+  if (publication.status === 'published-with-policy-fallback') {
     return { status: 'gate-configuration-failure', exitCode: 1 };
   }
   if (mode === 'gate' && approved === false) {

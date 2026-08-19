@@ -2,7 +2,7 @@
 
 import { requiredEnv, requiredPositiveIntegerEnv } from './env.mjs';
 import { GitHubCodeReviewApi } from './github-api.mjs';
-import { publishFailureNotice } from './publisher.mjs';
+import { publishFailureNotice } from './failure-notice.mjs';
 
 const api = new GitHubCodeReviewApi({
   token: requiredEnv('GH_TOKEN'),

@@ -38,6 +38,10 @@ inputs:
     description: Pull-request number for events without pull-request context
     required: false
     default: ''
+  cli-version:
+    description: Tessl CLI version to install; "latest" tracks the current release
+    required: false
+    default: latest
   cli-channel:
     # Internal. Switches the installed CLI to a release channel (head, nightly,
     # beta) after install, replacing the pinned version for that run. Used by
@@ -56,13 +60,10 @@ outputs:
     value: ${{ steps.pr.outputs['head-sha'] }}
   review-id:
     description: Created or reused GitHub review ID, when available
-    value: ${{ steps.publish.outputs['review-id'] }}
+    value: ${{ steps.review.outputs['review-id'] }}
   result-path:
     description: Absolute path to the structured CLI result
     value: ${{ steps.review.outputs['result-path'] }}
-  publication-path:
-    description: Absolute path to the publication receipt
-    value: ${{ steps.review.outputs['publication-path'] }}
   result-artifact:
     description: Name of the retained public result artifact
     value: ${{ steps.review.outputs['artifact-name'] }}
@@ -122,9 +123,12 @@ runs:
 
     - name: Install Tessl CLI
       id: setup
-      uses: tesslio/setup-tessl@25ec223fc0da33b41b8044ff5ab2b85235f4f91e # v2
+      # Past v2, which sends the version into the download URL unencoded: a
+      # release carrying SemVer build metadata (`1.2.3+test.…`) then 403s,
+      # which is every prerelease build a caller might pin for validation.
+      uses: tesslio/setup-tessl@33e1c9253e3673f28e1b8949475b250dbd57918e # main@33e1c92
       with:
-        version: 0.97.0
+        version: ${{ inputs['cli-version'] }}
         token: ${{ inputs['tessl-token'] }}
 
     - name: Switch Tessl CLI release channel
@@ -144,6 +148,19 @@ runs:
           echo '```'
         } >> "$GITHUB_STEP_SUMMARY"
 
+    # The CLI is no longer pinned by this Action, so an incompatible pair is
+    # possible and has to be legible. Without this, a CLI predating `--publish`
+    # fails deep in argument parsing and every review dies with a message that
+    # names neither cause nor fix.
+    - name: Check the installed CLI can publish
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! tessl code review --help 2>&1 | grep -q -- '--publish'; then
+          echo "::error::The installed Tessl CLI ($(tessl --version 2>/dev/null || echo 'unknown version')) cannot publish a review. Set the cli-version input to a release that supports it, or leave it unset to track the latest."
+          exit 1
+        fi
+
     - name: Run Tessl Code Review
       id: review
       shell: bash
@@ -155,35 +172,15 @@ runs:
         MODEL: ${{ inputs.model }}
         EFFORT: ${{ inputs.effort }}
         LENSES: ${{ inputs.lenses }}
+        MODE: ${{ inputs.mode }}
         HEAD_SHA: ${{ steps.pr.outputs['head-sha'] }}
       run: bash "$GITHUB_ACTION_PATH/src/run-review.sh"
-
-    - name: Publish review
-      id: publish
-      if: steps.review.outputs['exit-code'] == '0' && steps.review.outputs['result-status'] != 'skipped'
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-        REPOSITORY: ${{ github.repository }}
-        PR_NUMBER: ${{ steps.pr.outputs.number }}
-        HEAD_SHA: ${{ steps.pr.outputs['head-sha'] }}
-        REVIEW_OUTPUT: ${{ steps.review.outputs['result-path'] }}
-        PUBLISH_OUTPUT: ${{ steps.review.outputs['publication-path'] }}
-        MODE: ${{ inputs.mode }}
-        GITHUB_RUN_ID: ${{ github.run_id }}
-      run: |
-        set +e
-        node "$GITHUB_ACTION_PATH/src/publish-review.mjs"
-        code="$?"
-        set -e
-        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
 
     - name: Build public result
       if: always() && steps.review.outputs['artifact-path'] != ''
       shell: bash
       env:
         REVIEW_OUTPUT: ${{ steps.review.outputs['result-path'] }}
-        PUBLISH_OUTPUT: ${{ steps.review.outputs['publication-path'] }}
         PUBLIC_ARTIFACT_OUTPUT: ${{ steps.review.outputs['artifact-path'] }}
         LENSES: ${{ inputs.lenses }}
         PROFILE: ${{ inputs.profile }}
@@ -200,7 +197,7 @@ runs:
         if-no-files-found: warn
 
     - name: Publish visible technical failure
-      if: always() && (steps.review.outputs['exit-code'] != '0' || (steps.review.outputs['result-status'] != 'skipped' && steps.publish.outputs['exit-code'] != '0'))
+      if: always() && steps.review.outputs['exit-code'] != '0'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -218,9 +215,9 @@ runs:
         REPOSITORY: ${{ github.repository }}
         MODE: ${{ inputs.mode }}
         REVIEW_EXIT_CODE: ${{ steps.review.outputs['exit-code'] }}
-        PUBLISH_EXIT_CODE: ${{ steps.publish.outputs['exit-code'] }}
         REVIEW_OUTPUT: ${{ steps.review.outputs['result-path'] }}
-        PUBLISH_OUTPUT: ${{ steps.review.outputs['publication-path'] }}
         CHECK_RUN_ID: ${{ steps.check.outputs['check-run-id'] }}
+        PR_NUMBER: ${{ steps.pr.outputs.number }}
+        HEAD_SHA: ${{ steps.pr.outputs['head-sha'] }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: node "$GITHUB_ACTION_PATH/src/finalize.mjs"

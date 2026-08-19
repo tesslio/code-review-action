@@ -52,8 +52,8 @@ test('builds artifacts from an explicit field allowlist', () => {
       },
       diagnostics: { durationMs: 123, extraMetrics: { value: 900 } },
       unpublishedField: 'not-for-artifact',
+      publication: { schemaVersion: 1, status: 'published', reviewId: 7 },
     },
-    publication: { schemaVersion: 1, status: 'published', reviewId: 7 },
     requestedLenses: '["tessl/code-review#review-security"]',
   });
 
@@ -243,6 +243,30 @@ test('publishes a finding that carries its location flat on the finding', () => 
   });
 });
 
+test('projects the publication receipt onto the documented fields', () => {
+  // The receipt is CLI-controlled, so it goes through the same allowlist as
+  // every other section: a field added later stays out of the artifact until
+  // it is added here deliberately.
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: { approved: true },
+      publication: {
+        status: 'published',
+        reviewId: 7,
+        inlineCount: 2,
+        debugTranscript: 'reviewed source and prompts',
+        nested: { credential: 'secret' },
+      },
+    },
+  });
+  assert.deepEqual(artifact.publication, {
+    status: 'published',
+    reviewId: 7,
+    inlineCount: 2,
+  });
+});
+
 test('records a structured CLI failure without requiring publication', () => {
   const artifact = buildPublicArtifact({
     result: {
@@ -353,4 +377,34 @@ test('records the reported status when the result file holds JSON', async () => 
 
   assert.equal(written.status, 'ok');
   assert.equal(written.diagnostics.durationMs, 42);
+});
+
+test('drops receipt values outside their documented domain', () => {
+  // Naming the fields is not enough on its own: a caller-selected CLI could put
+  // a diagnostic, or a credential, in a field that is already published.
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: { approved: true },
+      publication: {
+        status: 'published',
+        reviewId: 7,
+        publishedEvent: 'ghp_leaked_credential_in_an_allowlisted_field',
+        inlineCount: -3,
+        reviewedHeadSha: 'not-a-sha',
+      },
+    },
+  });
+  assert.deepEqual(artifact.publication, { status: 'published', reviewId: 7 });
+});
+
+test('an unrecognised receipt status yields no receipt at all', () => {
+  const artifact = buildPublicArtifact({
+    result: {
+      status: 'ok',
+      outcome: { approved: true },
+      publication: { status: 'queued', reviewId: 7 },
+    },
+  });
+  assert.equal(artifact.publication, null);
 });

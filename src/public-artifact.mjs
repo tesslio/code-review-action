@@ -1,6 +1,9 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { isNoMatchingLensesResult } from './protocol.mjs';
+import {
+  isNoMatchingLensesResult,
+  publicationReceipt,
+} from './result-file.mjs';
 
 function selectedLenses(requestedLenses) {
   if (!requestedLenses) return undefined;
@@ -142,7 +145,6 @@ function publicConfiguration(configuration, lenses) {
 
 export function buildPublicArtifact({
   result,
-  publication,
   requestedLenses = '',
   requestedConfiguration = {},
 }) {
@@ -171,7 +173,9 @@ export function buildPublicArtifact({
       : { failure: pick(result.failure, FAILURE_FIELDS) }),
     diagnostics: publicDiagnostics(result?.diagnostics),
     ...(Object.keys(configuration).length === 0 ? {} : { configuration }),
-    publication: publication ?? null,
+    // Read from the CLI's result rather than a receipt of this Action's own:
+    // publication is the CLI's, so what it reports is what the artifact carries.
+    publication: publicationReceipt(result) ?? null,
   };
 }
 
@@ -193,14 +197,12 @@ async function readJsonIfPresent(path) {
 
 export async function writePublicArtifact({
   resultPath,
-  publicationPath,
   artifactPath,
   requestedLenses,
   requestedConfiguration,
 }) {
   const artifact = buildPublicArtifact({
     result: await readJsonIfPresent(resultPath),
-    publication: await readJsonIfPresent(publicationPath),
     requestedLenses,
     requestedConfiguration,
   });

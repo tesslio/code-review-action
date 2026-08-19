@@ -54,6 +54,13 @@ const REPORTS = {
     summary:
       'GitHub did not allow the workflow to submit the requested review event, so the complete review was published as a comment. Check the repository GitHub Actions and pull-request review settings.',
   },
+  'incompatible-cli': {
+    gate: 'failure',
+    advisory: 'neutral',
+    title: 'Incompatible Tessl CLI',
+    summary:
+      'The Tessl CLI that ran did not report which commit it reviewed, so this check cannot be concluded for the reviewed head. Set the Action\'s cli-version input to a release that reports it.',
+  },
   'gate-verdict-failure': {
     gate: 'failure',
     advisory: 'neutral',
