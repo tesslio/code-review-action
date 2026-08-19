@@ -8,8 +8,9 @@ A release is cut by dispatching the Release workflow, which:
 
 1. refuses to run from any ref but `main`; and
 2. creates the tagged GitHub release at main's head, with the release notes
-   stating the full commit SHA to pin and the CLI version the revision
-   installs, both read from the tagged commit.
+   stating the full commit SHA to pin, read from the tagged commit. The notes
+   name no CLI version: the Action installs the current release rather than a
+   pinned one, so no version is fixed at the moment of the cut.
 
 Nothing at release time checks that the head is green, because nothing at
 release time needs to: the validation jobs are required status checks on
