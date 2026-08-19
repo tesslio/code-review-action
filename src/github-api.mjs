@@ -1,5 +1,3 @@
-import { withAiSystemNotice } from './ai-notice.mjs';
-
 const API_ORIGIN = 'https://api.github.com';
 const API_VERSION = '2022-11-28';
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -19,17 +17,6 @@ const REACTION_COLLECTIONS = new Map([
   ['issue-comment', 'issues'],
   ['review-comment', 'pulls'],
 ]);
-
-function noticedCheckRunPayload(payload) {
-  if (payload.output === undefined) return payload;
-  return {
-    ...payload,
-    output: {
-      ...payload.output,
-      summary: withAiSystemNotice(payload.output.summary),
-    },
-  };
-}
 
 function isRetryableResponse(response) {
   if (response.status === 429 || response.status >= 500) return true;
@@ -213,14 +200,14 @@ export class GitHubCodeReviewApi {
   createCheckRun(payload) {
     return this.request(`/repos/${this.repository}/check-runs`, {
       method: 'POST',
-      body: noticedCheckRunPayload(payload),
+      body: payload,
     });
   }
 
   updateCheckRun(checkRunId, payload) {
     return this.request(
       `/repos/${this.repository}/check-runs/${checkRunId}`,
-      { method: 'PATCH', body: noticedCheckRunPayload(payload) },
+      { method: 'PATCH', body: payload },
     );
   }
 
@@ -231,7 +218,7 @@ export class GitHubCodeReviewApi {
   createIssueComment(number, body) {
     return this.request(`/repos/${this.repository}/issues/${number}/comments`, {
       method: 'POST',
-      body: { body: withAiSystemNotice(body) },
+      body: { body },
     });
   }
 
@@ -240,7 +227,7 @@ export class GitHubCodeReviewApi {
       `/repos/${this.repository}/issues/comments/${commentId}`,
       {
         method: 'PATCH',
-        body: { body: withAiSystemNotice(body) },
+        body: { body },
       },
     );
   }

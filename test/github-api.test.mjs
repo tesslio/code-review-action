@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { AI_SYSTEM_NOTICE } from '../src/ai-notice.mjs';
 import { GitHubApiError, GitHubCodeReviewApi } from '../src/github-api.mjs';
 
 function response(status, body = '') {
@@ -69,7 +68,7 @@ test('does not retry a mutating POST that could already have succeeded', async (
   assert.equal(calls, 1);
 });
 
-test('adds the AI-system notice at every Markdown publication boundary', async () => {
+test('publishes its own bodies verbatim, with no marker of its own', async () => {
   const requests = [];
   const api = new GitHubCodeReviewApi({
     token: 'token',
@@ -91,15 +90,20 @@ test('adds the AI-system notice at every Markdown publication boundary', async (
   await api.createIssueComment(10, 'Failure notice.');
   await api.updateIssueComment(40, 'Updated failure notice.');
 
-  const bodies = [
-    requests[0].body.output.summary,
-    requests[1].body.output.summary,
-    requests[2].body.body,
-    requests[3].body.body,
-  ];
-  for (const body of bodies) {
-    assert.equal(body.split(AI_SYSTEM_NOTICE).length - 1, 1);
-  }
+  assert.deepEqual(
+    [
+      requests[0].body.output.summary,
+      requests[1].body.output.summary,
+      requests[2].body.body,
+      requests[3].body.body,
+    ],
+    [
+      'Starting review.',
+      'Review complete.',
+      'Failure notice.',
+      'Updated failure notice.',
+    ],
+  );
 });
 
 test('publishes no review of its own, which the CLI owns', () => {
