@@ -23,7 +23,10 @@ inputs:
     required: false
     default: ''
   effort:
-    description: Reasoning effort override; empty uses the selected profile's default
+    description: >-
+      Reasoning effort for every review lens: low, medium or high. Overrides any
+      effort the profile sets, including a per-lens one. Empty falls back to a
+      lens's own effort, then the profile's, then the model's own default.
     required: false
     default: ''
   lenses:
