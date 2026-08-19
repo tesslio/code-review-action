@@ -8,7 +8,9 @@ This repository distributes the GitHub Action for Tessl Code Review.
 - Callers own triggers, concurrency, runners, timeouts, permissions, secrets,
   and branch protection.
 - The Action owns mention acknowledgement, pull-request resolution, checkout,
-  CLI setup, review publication, artifacts, and failure reporting.
+  CLI setup, the check run, artifacts, and failure reporting.
+- The CLI publishes the review, its inline findings, and the replies that
+  reconcile findings across rounds.
 - Review behavior and configuration belong to the Tessl CLI and review
   profiles.
 
