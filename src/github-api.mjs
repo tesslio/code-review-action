@@ -3,6 +3,14 @@ import { withAiSystemNotice } from './ai-notice.mjs';
 const API_VERSION = '2022-11-28';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_RETRY_DELAYS_MS = [250, 1_000];
+// Conversation comments and inline review comments are different resources with
+// separate reaction endpoints and separate id spaces, so a kind this map does
+// not name cannot be guessed at: the wrong endpoint would address a different
+// comment, not fail.
+const REACTION_COLLECTIONS = new Map([
+  ['issue-comment', 'issues'],
+  ['review-comment', 'pulls'],
+]);
 
 function noticedCheckRunPayload(payload) {
   if (payload.output === undefined) return payload;
@@ -184,6 +192,23 @@ export class GitHubCodeReviewApi {
         method: 'PATCH',
         body: { body: withAiSystemNotice(body) },
       },
+    );
+  }
+
+  /**
+   * React to a comment. `kind` is `'issue-comment'` for a conversation comment
+   * or `'review-comment'` for an inline review comment; any other value throws.
+   */
+  addCommentReaction({ kind, commentId, content }) {
+    const collection = REACTION_COLLECTIONS.get(kind);
+    if (collection === undefined) {
+      throw new Error(
+        `Comment kind must be issue-comment or review-comment, got ${kind}.`,
+      );
+    }
+    return this.request(
+      `/repos/${this.repository}/${collection}/comments/${commentId}/reactions`,
+      { method: 'POST', body: { content } },
     );
   }
 

@@ -110,3 +110,23 @@ test('adds the AI-system notice at every Markdown publication boundary', async (
     assert.equal(body.split(AI_SYSTEM_NOTICE).length - 1, 1);
   }
 });
+
+test('refuses a comment kind it has no endpoint for', () => {
+  const api = new GitHubCodeReviewApi({
+    token: 'token',
+    repository: 'acme/widgets',
+    fetchImpl: async () => {
+      throw new Error('no request should be attempted');
+    },
+  });
+
+  assert.throws(
+    () =>
+      api.addCommentReaction({
+        kind: 'review_comment',
+        commentId: '1',
+        content: 'eyes',
+      }),
+    /issue-comment or review-comment, got review_comment/,
+  );
+});
