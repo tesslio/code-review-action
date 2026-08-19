@@ -70,14 +70,24 @@ test('reacts to nothing on an event that carries no comment', async () => {
   }
 });
 
-test('says so and continues when the comment id is unusable', async () => {
+test('names the event payload when the comment id is unusable', async () => {
   const { exitCode, stdout, requests } = await acknowledge({
     COMMENT_ID: 'not-an-id',
   });
 
   assert.equal(exitCode, 0);
   assert.equal(requests, '');
-  assert.match(stdout, /::notice::Skipped acknowledging/);
+  assert.match(stdout, /no usable comment id \(not-an-id\)/);
+});
+
+test('names the step wiring when the token or repository is absent', async () => {
+  for (const absent of [{ GH_TOKEN: '' }, { REPOSITORY: '' }]) {
+    const { exitCode, stdout, requests } = await acknowledge(absent);
+
+    assert.equal(exitCode, 0);
+    assert.equal(requests, '');
+    assert.match(stdout, /no GitHub token or repository was supplied/);
+  }
 });
 
 test('says so and continues when GitHub refuses the reaction', async () => {

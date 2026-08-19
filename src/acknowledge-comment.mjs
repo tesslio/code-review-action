@@ -29,9 +29,19 @@ if (kind === undefined) {
   process.exit(0);
 }
 
-if (!/^[1-9]\d*$/.test(commentId) || token === '' || repository === '') {
+// Separate notices: a missing token or repository is the workflow's wiring,
+// while an unusable id is the event's payload, and they send a reader looking
+// in different places.
+if (token === '' || repository === '') {
   console.log(
-    '::notice::Skipped acknowledging the triggering comment: the event carried no usable comment.',
+    '::notice::Skipped acknowledging the triggering comment: no GitHub token or repository was supplied to this step.',
+  );
+  process.exit(0);
+}
+
+if (!/^[1-9]\d*$/.test(commentId)) {
+  console.log(
+    `::notice::Skipped acknowledging the triggering comment: the event carried no usable comment id (${commentId === '' ? 'empty' : commentId}).`,
   );
   process.exit(0);
 }
