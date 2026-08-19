@@ -138,6 +138,35 @@ test('follows the pagination link rather than guessing from a short page', async
   ]);
 });
 
+test('reads a next link whose parameters come in any order', async () => {
+  const paths = [];
+  const api = new GitHubCodeReviewApi({
+    token: 'token',
+    repository: 'acme/widgets',
+    fetchImpl: async (url) => {
+      const parsed = new URL(url);
+      paths.push(parsed.pathname + parsed.search);
+      // rel before another parameter, quoted as a token list, and a comma inside
+      // the URI: all valid, and all forms the first parser would have missed.
+      return paths.length === 1
+        ? new Response('[{"id":1}]', {
+            status: 200,
+            headers: {
+              'content-type': 'application/json',
+              link: '<https://api.github.com/repos/acme/widgets/issues/9/comments?per_page=100&labels=a,b&page=2>; rel="next prev"; type="application/json"',
+            },
+          })
+        : response(200, '[{"id":2}]');
+    },
+  });
+
+  assert.deepEqual(await api.issueComments(9), [{ id: 1 }, { id: 2 }]);
+  assert.equal(
+    paths[1],
+    '/repos/acme/widgets/issues/9/comments?per_page=100&labels=a,b&page=2',
+  );
+});
+
 test('ignores a pagination link pointing at another origin', async () => {
   let calls = 0;
   const api = new GitHubCodeReviewApi({
@@ -185,11 +214,68 @@ test('waits as long as a throttled response asks, up to a ceiling', async () => 
 
   await apiWithRetryAfter('7').request('/test');
   await apiWithRetryAfter('3600').request('/test');
-  await apiWithRetryAfter('not-a-number').request('/test');
+  await apiWithRetryAfter('not-a-date-or-a-number').request('/test');
 
   // The asked-for wait, the ceiling, then this attempt's own backoff when the
-  // header cannot be read as a number.
+  // header cannot be read at all.
   assert.deepEqual(delays, [7_000, 60_000, 250]);
+});
+
+test('reads a Retry-After given as an HTTP date', async () => {
+  const nowMs = Date.parse('2026-08-19T12:00:00Z');
+  const delays = [];
+  let calls = 0;
+  const api = new GitHubCodeReviewApi({
+    token: 'token',
+    repository: 'acme/widgets',
+    retryDelaysMs: [250],
+    sleep: async (delay) => delays.push(delay),
+    now: () => nowMs,
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response('{"message":"slow down"}', {
+            status: 429,
+            headers: {
+              'content-type': 'application/json',
+              'retry-after': 'Wed, 19 Aug 2026 12:00:12 GMT',
+            },
+          })
+        : response(200, '{"ok":true}');
+    },
+  });
+
+  await api.request('/test');
+
+  assert.deepEqual(delays, [12_000]);
+});
+
+test('treats a Retry-After date already past as no wait at all', async () => {
+  const delays = [];
+  let calls = 0;
+  const api = new GitHubCodeReviewApi({
+    token: 'token',
+    repository: 'acme/widgets',
+    retryDelaysMs: [250],
+    sleep: async (delay) => delays.push(delay),
+    now: () => Date.parse('2026-08-19T12:00:00Z'),
+    fetchImpl: async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response('{}', {
+            status: 500,
+            headers: {
+              'content-type': 'application/json',
+              'retry-after': 'Wed, 19 Aug 2026 11:59:30 GMT',
+            },
+          })
+        : response(200, '{"ok":true}');
+    },
+  });
+
+  await api.request('/test');
+
+  assert.deepEqual(delays, [0]);
 });
 
 test('refuses a comment kind it has no endpoint for', () => {

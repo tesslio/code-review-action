@@ -41,35 +41,61 @@ function isRetryableResponse(response) {
 }
 
 /**
- * The delay before the next attempt: what the response asks for when it says so
- * and the number is usable, otherwise this attempt's own backoff. Ignoring the
- * header is what turns one throttled request into a throttled job.
+ * The delay a response asks for, in milliseconds, or `undefined` when it asks
+ * for none this code can read. `Retry-After` carries either delay-seconds or an
+ * HTTP-date (RFC 9110); GitHub sends seconds, and a date form read as unusable
+ * would retry a throttled request long before the server allows it.
  */
-function retryDelayMs(response, fallbackMs) {
-  const requestedSeconds = Number(response.headers.get('retry-after'));
-  if (!Number.isFinite(requestedSeconds) || requestedSeconds <= 0) {
-    return fallbackMs;
-  }
-  return Math.min(requestedSeconds * 1_000, MAX_HONOURED_RETRY_AFTER_MS);
+function requestedRetryMs(headerValue, nowMs) {
+  const value = headerValue?.trim();
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+  const dateMs = Date.parse(value);
+  if (Number.isNaN(dateMs)) return undefined;
+  return Math.max(0, dateMs - nowMs);
+}
+
+/**
+ * The wait before the next attempt: what the response asks for when it says so,
+ * otherwise this attempt's own backoff. Ignoring the header is what turns one
+ * throttled request into a throttled job.
+ */
+function retryDelayMs(response, fallbackMs, nowMs) {
+  const requested = requestedRetryMs(response.headers.get('retry-after'), nowMs);
+  if (requested === undefined) return fallbackMs;
+  return Math.min(requested, MAX_HONOURED_RETRY_AFTER_MS);
 }
 
 /**
  * The path of the next page a `Link` header points at, or `undefined` when it
  * points at none. A link to another origin is ignored rather than followed.
+ *
+ * Entries split only at a comma that starts a new `<uri>`, so a comma inside a
+ * URI or a quoted parameter does not split one entry in two. Parameters are read
+ * in any order and `rel` is a space-separated token list, both per RFC 8288:
+ * GitHub happens to send `rel` last, which is not worth depending on.
  */
 function nextPagePath(linkHeader) {
   if (!linkHeader) return undefined;
-  for (const entry of linkHeader.split(',')) {
-    const match = /^\s*<([^>]+)>\s*;\s*rel="?next"?/.exec(entry);
-    if (match === null) continue;
+  for (const entry of linkHeader.split(/,\s*(?=<)/)) {
+    const uri = /^\s*<([^>]*)>/.exec(entry);
+    if (uri === null) continue;
+    const rel = /;\s*rel\s*=\s*(?:"([^"]*)"|([^";,\s]+))/i.exec(entry);
+    const tokens = (rel?.[1] ?? rel?.[2] ?? '')
+      .trim()
+      .toLowerCase()
+      .split(/\s+/);
+    if (!tokens.includes('next')) continue;
     let url;
     try {
-      url = new URL(match[1]);
+      url = new URL(uri[1]);
     } catch {
       return undefined;
     }
-    if (url.origin !== API_ORIGIN) return undefined;
-    return `${url.pathname}${url.search}`;
+    return url.origin === API_ORIGIN
+      ? `${url.pathname}${url.search}`
+      : undefined;
   }
   return undefined;
 }
@@ -90,6 +116,7 @@ export class GitHubCodeReviewApi {
     timeoutMs = DEFAULT_TIMEOUT_MS,
     retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
     sleep = (delay) => new Promise((resolve) => setTimeout(resolve, delay)),
+    now = () => Date.now(),
   }) {
     const parts = repository.split('/');
     if (parts.length !== 2 || parts.some((part) => part.length === 0)) {
@@ -101,6 +128,7 @@ export class GitHubCodeReviewApi {
     this.timeoutMs = timeoutMs;
     this.retryDelaysMs = retryDelaysMs;
     this.sleep = sleep;
+    this.now = now;
     this.headers = {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token}`,
@@ -149,7 +177,9 @@ export class GitHubCodeReviewApi {
         canRetry &&
         isRetryableResponse(response)
       ) {
-        await this.sleep(retryDelayMs(response, this.retryDelaysMs[attempt]));
+        await this.sleep(
+          retryDelayMs(response, this.retryDelaysMs[attempt], this.now()),
+        );
         continue;
       }
       throw new GitHubApiError(method, path, response.status, text);
