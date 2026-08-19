@@ -33,16 +33,22 @@ concurrency:
 jobs:
   review:
     # Run when a pull request is opened, for an explicit dispatch, or for a
-    # comment on an open pull request that mentions @tessl-code-review, by an
-    # owner, an organization member, or an invited collaborator.
+    # comment on an open pull request whose body carries @tessl-code-review as a
+    # whole token, by an owner, an organization member, or an invited
+    # collaborator. The boundary checks stop @tessl-code-reviewer and similar
+    # from starting a privileged round.
     if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
         github.event.issue.pull_request != null &&
         github.event.issue.state == 'open' &&
-        contains(github.event.comment.body, '@tessl-code-review') &&
-        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+        contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
+        (github.event.comment.body == '@tessl-code-review' ||
+          startsWith(github.event.comment.body, '@tessl-code-review ') ||
+          contains(github.event.comment.body, '@tessl-code-review\n') ||
+          contains(github.event.comment.body, ' @tessl-code-review ') ||
+          endsWith(github.event.comment.body, ' @tessl-code-review')))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -58,6 +64,13 @@ jobs:
           # gate publishes an approve or request-changes review and reports the
           # Tessl Code Review check accordingly.
           mode: gate
+          # Explicit lens selection so a required gate always produces a verdict.
+          # Without pinned lenses, a pull request matching none of the profile's
+          # lenses yields skipped-no-matching-lenses, which reports a neutral
+          # check; GitHub treats a neutral required check as passing, letting a
+          # pull request satisfy the gate with no approval.
+          lenses: >-
+            ["tessl/code-review@0.1.0#review-correctness-and-data-integrity","tessl/code-review@0.1.0#review-security-and-privacy","tessl/code-review@0.1.0#review-maintainability-and-code-quality"]
           # Supplies the pull-request number for events that carry no
           # pull-request context. Empty on pull_request events, where the Action
           # resolves the pull request itself.
