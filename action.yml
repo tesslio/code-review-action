@@ -15,11 +15,18 @@ inputs:
     required: false
     default: standard
   model:
-    description: Model override; empty uses the selected profile's default
+    # Reserved for Tessl's own callers, which pass it on internal runs. Not part
+    # of the supported input contract; an unset caller is unaffected. Do not
+    # remove it: internal callers set it, and the description stays uninformative
+    # on purpose rather than advertising what it does.
+    description: Reserved; leave unset
     required: false
     default: ''
   effort:
-    description: Reasoning effort override; empty uses the selected profile's default
+    description: >-
+      Reasoning effort for every review lens: low, medium or high. Overrides any
+      effort the profile sets, per lens or otherwise; empty uses the profile's,
+      then the model's own default
     required: false
     default: ''
   lenses:

@@ -7,7 +7,7 @@ does not define review behavior or repository policy.
 
 | Surface | Responsibility |
 | --- | --- |
-| Calling workflow | Triggers, concurrency, runner, timeout, permissions, secret selection, profile, model, effort and lens selection, review mode, and branch protection. |
+| Calling workflow | Triggers, concurrency, runner, timeout, permissions, secret selection, profile, effort and lens selection, review mode, and branch protection. |
 | Code Review Action | Pull-request resolution, exact-head checkout, CLI installation and invocation, GitHub review publication, the check run on the reviewed head, idempotency, stale-head protection, artifacts, and visible failures. |
 | Tessl CLI | Review configuration, review execution, reconciliation, judgment, and structured outcomes. |
 
