@@ -21,7 +21,8 @@ would be a machine veto over a human decision.
 
 An exact tag is immutable: one release per exact tag, never moved and never
 re-pointed. A dispatch naming an existing exact tag fails, and that failure is
-the policy working. The major tag is the one exception, and the section below
+the policy working. A dispatch naming a bare major fails too, because that tag is
+the moving one and a release cannot own a tag a later release takes. The major tag is the one exception, and the section below
 states what it means. Making a new release the Marketplace-listed version is a
 manual checkbox on the release page.
 
@@ -39,6 +40,12 @@ someone changes it.
 A caller that wants immutability pins the exact tag's commit SHA instead, and
 accepts that updates need a deliberate bump. Both are supported; only one of them
 can be fixed remotely.
+
+If a release is created and its major tag cannot be moved, the workflow fails
+saying so and naming the one command that finishes it. Re-dispatching will not:
+the exact tag now exists, and this workflow refuses an existing one. Until the
+major tag moves, a caller on it is on the previous revision, which is why that
+failure is loud rather than a warning.
 
 A moving tag is a trust boundary, so it has to be protected like one. Whoever can
 move `v1` can change the code every caller on it runs, with that caller's secrets

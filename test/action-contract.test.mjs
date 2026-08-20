@@ -244,7 +244,7 @@ test('a release tag has to be a semantic version, and a new one', async () => {
   const pattern = /grep -qE '(\^v[^']+)'/.exec(workflow)?.[1];
   assert.ok(pattern, 'expected a tag grammar in the release workflow');
   const grammar = new RegExp(pattern);
-  for (const tag of ['v1', 'v1.2', 'v1.2.3', 'v0.1.0', 'v10.20.30']) {
+  for (const tag of ['v1.2', 'v1.2.3', 'v0.1.0', 'v10.20.30']) {
     assert.ok(grammar.test(tag), tag);
   }
   for (const tag of [
@@ -256,13 +256,23 @@ test('a release tag has to be a semantic version, and a new one', async () => {
     'main',
     'v',
     'v1.2.3-rc.1',
+    // A bare major is the moving tag, never an exact release.
+    'v1',
   ]) {
     assert.ok(!grammar.test(tag), tag);
   }
-  // An existing exact tag is refused before the release is created, because
-  // `gh release create` would publish against that tag and ignore --target.
-  // The command, not the comment above the guard that also names it.
+
+  // The guard is the ref lookup and its failure path, not the sentence it
+  // prints: a test that only found the message would pass with the lookup gone.
+  // The command, not the comment above it that also names it.
   const create = workflow.indexOf('\n          gh release create');
-  const guard = workflow.indexOf('already exists; an exact tag is never moved');
-  assert.ok(guard > 0 && guard < create);
+  const lookup = workflow.indexOf('git/matching-refs/tags/$TAG');
+  assert.ok(lookup > 0 && lookup < create);
+  const guard = workflow.slice(lookup, create);
+  // Absence is a value from this endpoint, so a failed call must stop the
+  // release rather than read as proof the tag is free.
+  assert.match(guard, /Could not determine whether \$TAG already exists/);
+  assert.match(guard, /if \[ "\$existing" != "0" \]; then/);
+  assert.match(guard, /already exists; an exact tag is never moved/);
+  assert.equal((guard.match(/exit 1/g) ?? []).length, 2);
 });
