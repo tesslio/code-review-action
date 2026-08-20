@@ -95,23 +95,54 @@ jobs:
           # pinned. An exact tag stays immutable; the major tag is the moving one
           # a caller opts into.
           MAJOR="v$(printf '%s' "$TAG" | sed -E 's/^v([0-9]+).*/\1/')"
-          if gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$MAJOR" \
-               -f sha="$SHA" -F force=true >/dev/null 2>&1 \
-             || gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
-                  -f ref="refs/tags/$MAJOR" -f sha="$SHA" >/dev/null 2>&1; then
+
+          # Create or move, decided by whether the ref is there. Absence is a
+          # value from matching-refs, as above, so a failed lookup leaves
+          # existing_major empty and neither branch runs: a transient error must
+          # not be read as "the ref is absent, create it", and a PATCH failure
+          # must not be read as "the ref is absent" either.
+          existing_major="$(
+            gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$MAJOR" \
+              --jq "[.[] | select(.ref == \"refs/tags/$MAJOR\")] | length"
+          )" || existing_major=""
+
+          moved=no
+          if [ "$existing_major" = "0" ]; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$MAJOR" -f sha="$SHA" >/dev/null && moved=yes
+          elif [ -n "$existing_major" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$MAJOR" \
+              -f sha="$SHA" -F force=true >/dev/null && moved=yes
+          fi
+
+          if [ "$moved" = "yes" ]; then
             echo "::notice::$MAJOR now points at $SHA."
           else
-            # The release exists and is correct; only the major tag is behind. Say
-            # so and fail, because a caller on $MAJOR is silently on the previous
-            # revision until someone finishes this. Re-dispatching cannot fix it:
-            # $TAG now exists, and this workflow refuses an existing exact tag.
-            echo "::error::Release $TAG was created at $SHA, but $MAJOR was not moved."
-            # PATCH-or-create, because the first release of a major has no ref to
-            # move and a later one does. Both halves print their own failure, so a
-            # remediation that does not work is visible rather than assumed.
-            echo "::error::Finish it by hand, in this order:"
-            echo "::error::  gh api -X PATCH repos/$GITHUB_REPOSITORY/git/refs/tags/$MAJOR -f sha=$SHA -F force=true"
-            echo "::error::  gh api -X POST repos/$GITHUB_REPOSITORY/git/refs -f ref=refs/tags/$MAJOR -f sha=$SHA"
+            # The release exists and is correct; only the major tag is behind, so
+            # a caller on $MAJOR is silently on the previous revision until
+            # someone finishes this. Re-dispatching cannot: $TAG now exists, and
+            # this workflow refuses an existing exact tag.
+            #
+            # The remediation goes in the run summary rather than an annotation,
+            # because it is a block to copy, and it is the same conditional this
+            # step just ran: exactly one request, chosen by whether the ref is
+            # there, so a completed recovery never reports a failure.
+            {
+              echo "### $MAJOR was not moved"
+              echo
+              echo "Release \`$TAG\` exists at \`$SHA\` and is correct. A caller on"
+              echo "\`$MAJOR\` stays on the previous revision until this runs:"
+              echo
+              echo '```bash'
+              echo "REPO=$GITHUB_REPOSITORY MAJOR=$MAJOR SHA=$SHA"
+              echo 'if [ "$(gh api "repos/$REPO/git/matching-refs/tags/$MAJOR" --jq "[.[] | select(.ref == \"refs/tags/$MAJOR\")] | length")" = "0" ]; then'
+              echo '  gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$MAJOR" -f sha="$SHA"'
+              echo 'else'
+              echo '  gh api -X PATCH "repos/$REPO/git/refs/tags/$MAJOR" -f sha="$SHA" -F force=true'
+              echo 'fi'
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Release $TAG was created at $SHA, but $MAJOR was not moved. The run summary carries the command that finishes it."
             exit 1
           fi
           {

@@ -275,4 +275,19 @@ test('a release tag has to be a semantic version, and a new one', async () => {
   assert.match(guard, /if \[ "\$existing" != "0" \]; then/);
   assert.match(guard, /already exists; an exact tag is never moved/);
   assert.equal((guard.match(/exit 1/g) ?? []).length, 2);
+
+  // The major tag is created or moved, decided by a confirmed lookup, so
+  // neither the run nor the remediation it prints reports a failure it expected.
+  const retag = workflow.slice(workflow.indexOf('MAJOR="v$('));
+  assert.match(retag, /existing_major="\$\(/);
+  assert.match(retag, /if \[ "\$existing_major" = "0" \]; then/);
+  assert.match(retag, /gh api -X POST/);
+  assert.match(retag, /elif \[ -n "\$existing_major" \]; then/);
+  assert.match(retag, /gh api -X PATCH/);
+  // The printed recovery is the same conditional, not two commands one of which
+  // always fails by design.
+  assert.match(
+    retag,
+    /echo 'if \[ "\$\(gh api "repos\/\$REPO\/git\/matching-refs/,
+  );
 });
