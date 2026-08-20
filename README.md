@@ -153,9 +153,10 @@ the run with nothing published and `status: not-requested`.
 
 The `issue.state` condition belongs in that prefilter: the Action refuses to
 review a closed or merged pull request, so without it a stray mention there starts
-a run that fails and posts a failure notice rather than quietly doing nothing.
-`cancel-in-progress: false` keeps a requested review from being canceled by the
-next request.
+a run that fails, and fails without explaining itself on the pull request. The
+pull-request number is never resolved for a closed one, so the failure notice has
+nothing to address and is not published either. `cancel-in-progress: false` keeps
+a requested review from being canceled by the next request.
 
 The concurrency group is the same one the every-commit workflow below uses, so
 a repository running both never has two runs publishing for the same pull

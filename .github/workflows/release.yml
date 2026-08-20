@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Release tag to create (for example v2)
+        description: Release tag to create (for example v2.0.0)
         required: true
 
 permissions:
@@ -106,7 +106,12 @@ jobs:
             # revision until someone finishes this. Re-dispatching cannot fix it:
             # $TAG now exists, and this workflow refuses an existing exact tag.
             echo "::error::Release $TAG was created at $SHA, but $MAJOR was not moved."
-            echo "::error::Finish it by hand: gh api -X PATCH repos/$GITHUB_REPOSITORY/git/refs/tags/$MAJOR -f sha=$SHA -F force=true"
+            # PATCH-or-create, because the first release of a major has no ref to
+            # move and a later one does. Both halves print their own failure, so a
+            # remediation that does not work is visible rather than assumed.
+            echo "::error::Finish it by hand, in this order:"
+            echo "::error::  gh api -X PATCH repos/$GITHUB_REPOSITORY/git/refs/tags/$MAJOR -f sha=$SHA -F force=true"
+            echo "::error::  gh api -X POST repos/$GITHUB_REPOSITORY/git/refs -f ref=refs/tags/$MAJOR -f sha=$SHA"
             exit 1
           fi
           {

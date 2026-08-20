@@ -42,7 +42,8 @@ accepts that updates need a deliberate bump. Both are supported; only one of the
 can be fixed remotely.
 
 If a release is created and its major tag cannot be moved, the workflow fails
-saying so and naming the one command that finishes it. Re-dispatching will not:
+saying so and printing the two commands that finish it: move the ref, or create it
+when this is the first release of that major. Re-dispatching will not:
 the exact tag now exists, and this workflow refuses an existing one. Until the
 major tag moves, a caller on it is on the previous revision, which is why that
 failure is loud rather than a warning.
