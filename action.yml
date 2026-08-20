@@ -96,8 +96,13 @@ runs:
         COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
         # The pull request's own author, from whichever payload carried it: an
         # inline review comment nests the pull request, a conversation comment
-        # nests the issue.
-        PR_AUTHOR: ${{ github.event.pull_request.user.login || github.event.issue.user.login }}
+        # nests the issue. The issue branch is taken only when that issue is a
+        # pull request — an ordinary issue has an opener too, and treating them
+        # as an author would let them bypass the allowlist on their own issue.
+        PR_AUTHOR: >-
+          ${{ github.event.pull_request.user.login
+              || (github.event.issue.pull_request && github.event.issue.user.login)
+              || '' }}
         ALLOWED_ASSOCIATIONS: ${{ inputs['allowed-associations'] }}
       run: node "$GITHUB_ACTION_PATH/src/decide-request.mjs"
 

@@ -47,6 +47,17 @@ test('decides a review request before anything visible happens', () => {
   // Advertised as supported configuration, so it belongs in the Inputs table.
   assert.match(contract, /^\| `allowed-associations` \| no \|/m);
   assert.match(contract, /## Who decides what/);
+  // The author exemption must not reach an ordinary issue's opener: they are the
+  // author of an issue, not of a pull request, and would otherwise bypass the
+  // allowlist on their own issue.
+  const decide = action.slice(
+    action.indexOf('name: Decide whether a review was requested'),
+    action.indexOf('name: Acknowledge the triggering comment'),
+  );
+  assert.match(
+    decide,
+    /github\.event\.issue\.pull_request && github\.event\.issue\.user\.login/,
+  );
 });
 
 test('rejects an effort outside the values it advertises', () => {

@@ -78,7 +78,11 @@ function decide({ eventName, body, association, allowed, author, prAuthor }) {
   // accident: a `pull_request_review_comment` payload reports the author of the
   // branch's commits as CONTRIBUTOR, where the same person on the same pull
   // request is MEMBER in an `issue_comment` payload and in the REST API.
-  if (author !== undefined && author !== '' && author === prAuthor) {
+  // GitHub logins are case-insensitive, so the same account can arrive spelled
+  // two ways and must still be one person.
+  const commenter = (author ?? '').toLowerCase();
+  const owner = (prAuthor ?? '').toLowerCase();
+  if (commenter !== '' && commenter === owner) {
     return { requested: true };
   }
   if (!allowed.has((association ?? '').toUpperCase())) {

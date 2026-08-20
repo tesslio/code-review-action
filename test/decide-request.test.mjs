@@ -166,3 +166,16 @@ test('an author exemption needs a real login on both sides', async () => {
 
   assert.match(outputs, /requested=false/);
 });
+
+test('the author exemption ignores login casing', async () => {
+  const { outputs } = await decide({
+    EVENT_NAME: 'pull_request_review_comment',
+    COMMENT_BODY: '@tessl-code-review',
+    COMMENT_ASSOCIATION: 'CONTRIBUTOR',
+    COMMENT_AUTHOR: 'Author',
+    PR_AUTHOR: 'author',
+    ALLOWED_ASSOCIATIONS: 'OWNER,MEMBER,COLLABORATOR',
+  });
+
+  assert.match(outputs, /requested=true/);
+});
