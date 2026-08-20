@@ -52,8 +52,25 @@ jobs:
             echo
             echo "This revision installs the current Tessl CLI release. Set the"
             echo "\`cli-version\` input to pin an exact one."
+            echo
+            echo "The major tag now points here, so a caller on that tag is on this"
+            echo "revision."
           } > /tmp/notes.md
           gh release create "$TAG" --target "$SHA" --title "$TAG" --notes-file /tmp/notes.md
+
+          # Move the major tag to this release. Without it a caller on `v1` sits
+          # on whatever commit the tag was first created at, which looks current
+          # and is not: that is worse than a pinned SHA, which at least looks
+          # pinned. An exact tag stays immutable; the major tag is the moving one
+          # a caller opts into.
+          MAJOR="${TAG%%.*}"
+          if [ "$MAJOR" != "$TAG" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$MAJOR" \
+              -f sha="$SHA" -F force=true >/dev/null 2>&1 \
+              || gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+                   -f ref="refs/tags/$MAJOR" -f sha="$SHA" >/dev/null
+            echo "::notice::$MAJOR now points at $SHA."
+          fi
           {
             echo "### Release ${TAG} cut at ${SHA}"
             echo "Marketplace listing update is manual: open the release, edit, tick the Marketplace checkbox, publish."

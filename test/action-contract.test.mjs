@@ -26,9 +26,27 @@ test('exposes one product-level Action contract', () => {
     'lenses',
     'mode',
     'pr-number',
+    'allowed-associations',
     'cli-version',
     'cli-channel',
   ]);
+});
+
+test('decides a review request before anything visible happens', () => {
+  const steps = [...action.matchAll(/^    - name: (.+)$/gm)].map(
+    (match) => match[1],
+  );
+  assert.equal(steps[0], 'Decide whether a review was requested');
+  assert.equal(steps[1], 'Acknowledge the triggering comment');
+  // Every later step is gated on the decision, so a comment that asked for
+  // nothing leaves no check run, no reaction and no review behind it.
+  const gated = action.split('- name:').filter((step) =>
+    /steps\.request\.outputs\.requested == 'true'/.test(step),
+  );
+  assert.equal(gated.length, steps.length - 1);
+  // Advertised as supported configuration, so it belongs in the Inputs table.
+  assert.match(contract, /^\| `allowed-associations` \| no \|/m);
+  assert.match(contract, /## Who decides what/);
 });
 
 test('rejects an effort outside the values it advertises', () => {
@@ -122,10 +140,11 @@ test('documents approval as the public success status', () => {
 
 test('publishes a failure notice only when the review itself failed', () => {
   // The CLI reviews and publishes in one invocation, so its exit code is the
-  // only signal here; a no-match result exits zero and leaves no notice.
+  // only signal here; a no-match result exits zero and leaves no notice, and a
+  // run that was never a review request leaves none either.
   assert.match(
     action,
-    /if: always\(\) && steps\.review\.outputs\['exit-code'\] != '0'/,
+    /if: always\(\) && steps\.request\.outputs\.requested == 'true' && steps\.review\.outputs\['exit-code'\] != '0'/,
   );
   assert.match(contract, /`skipped-no-matching-lenses`/);
   assert.match(contract, /`no-matching-lenses`/);

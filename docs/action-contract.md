@@ -12,7 +12,26 @@ The supported entry point is `action.yml`.
 | `effort` | no | Reasoning effort for every review lens: `low`, `medium` or `high`. Overrides any effort the profile sets, including a per-lens one. Empty sends none, leaving the installed CLI to resolve it from the profile and the model's own default. A value outside the three is rejected before the review starts. |
 | `mode` | no | `advisory` or `gate`. Defaults to `advisory`. |
 | `pr-number` | no | Open pull-request number for an event without pull-request context. |
+| `allowed-associations` | no | Comma-separated GitHub author associations whose comments may request a review, for example `OWNER,MEMBER,COLLABORATOR`. Empty accepts any author. Applies to comment events only; a comment from any other association is not a request and nothing runs. |
 | `cli-version` | no | Tessl CLI version to install. Defaults to `latest`, which tracks the current release; set an exact version to fix the CLI alongside the Action's own commit SHA. The selected release must publish a review and report the revision it reviewed; one that does not concludes `incompatible-cli`. |
+
+## Who decides what
+
+A caller declares which events reach the workflow, grants the permissions, and
+sets its own concurrency. It also carries a coarse `if:` so GitHub does not start
+a runner for every comment in the repository — a workflow expression cannot match
+a token boundary, so that filter is loose on purpose.
+
+Everything after that is the Action's. Whether a comment is a request for a review
+is decided here, once, from the comment body and the author's association: the
+handle must appear as a whole token, case-insensitively, so `@tessl-code-reviewer`
+is not a request. A caller does not implement that rule and cannot disagree with
+it.
+
+An event the Action does not admit ends the run immediately. Nothing is published,
+no check run is created, no reaction is posted, and `status` is `not-requested`.
+A caller can treat that as success, because refusing to review a comment that did
+not ask for one is not a failure.
 
 ## Outputs
 

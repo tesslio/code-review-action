@@ -26,6 +26,21 @@ always the release commit SHA quoted in the notes, which is also what the
 setup plugin resolves and pins. Making a new release the Marketplace-listed
 version is a manual checkbox on the release page.
 
+## Tags
+
+An exact tag — `v1.2.0` — is immutable. It names one commit forever, and a
+dispatch naming an existing exact tag fails rather than moving it.
+
+The major tag — `v1` — moves. Cutting a release repoints it at that release's
+commit, so a caller on `v1` is on the newest 1.x revision without editing its
+workflow. That is the recommended reference, and it is what lets a fix reach a
+caller at all: a caller pinned to a commit SHA keeps the revision it pinned until
+someone changes it.
+
+A caller that wants immutability pins the exact tag's commit SHA instead, and
+accepts that updates need a deliberate bump. Both are supported; only one of them
+can be fixed remotely.
+
 ## Pre-release validation against an unreleased CLI
 
 Integration happens on `main` itself: the monorepo's caller rides
