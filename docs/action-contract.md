@@ -12,7 +12,7 @@ The supported entry point is `action.yml`.
 | `effort` | no | Reasoning effort for every review lens: `low`, `medium` or `high`. Overrides any effort the profile sets, including a per-lens one. Empty sends none, leaving the installed CLI to resolve it from the profile and the model's own default. A value outside the three is rejected before the review starts. |
 | `mode` | no | `advisory` or `gate`. Defaults to `advisory`. |
 | `pr-number` | no | Open pull-request number for an event without pull-request context. |
-| `allowed-associations` | no | Comma-separated GitHub author associations whose comments may request a review, for example `OWNER,MEMBER,COLLABORATOR`. Empty accepts any author. Applies to comment events only; a comment from any other association is not a request and nothing runs. |
+| `allowed-associations` | no | Comma-separated GitHub author associations whose comments may request a review, for example `OWNER,MEMBER,COLLABORATOR`. Empty accepts any author. Applies to comment events only; a comment from any other association is not a request and nothing runs. The pull request's own author is never refused, whatever the list says — see below. |
 | `cli-version` | no | Tessl CLI version to install. Defaults to `latest`, which tracks the current release; set an exact version to fix the CLI alongside the Action's own commit SHA. The selected release must publish a review and report the revision it reviewed; one that does not concludes `incompatible-cli`. |
 
 ## Who decides what
@@ -27,6 +27,20 @@ is decided here, once, from the comment body and the author's association: the
 handle must appear as a whole token, case-insensitively, so `@tessl-code-reviewer`
 is not a request. A caller does not implement that rule and cannot disagree with
 it.
+
+`allowed-associations` has one exemption: the pull request's own author is always
+allowed to request a review of it. That is a policy statement — an author already
+decides what the pull request contains, so refusing their request protects
+nothing — and it is also a defence against GitHub's own value. The association in
+a `pull_request_review_comment` payload reports the author of the branch's commits
+as `CONTRIBUTOR`, where the same person on the same pull request is `MEMBER` in an
+`issue_comment` payload and in the REST API. Without the exemption, a list of
+`OWNER,MEMBER,COLLABORATOR` silently refused an author's inline requests on their
+own pull request.
+
+Read `allowed-associations` as "who else may ask", and treat the association as a
+coarse signal rather than an authorization boundary: it is what the event payload
+says, not a permission lookup.
 
 An event the Action does not admit ends the run immediately. Nothing is published,
 no check run is created, no reaction is posted, and `status` is `not-requested`.

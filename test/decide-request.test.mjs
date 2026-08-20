@@ -119,3 +119,63 @@ test('an allowlist naming something GitHub does not fails loudly', async () => {
   assert.match(stderr, /allowed-associations must name GitHub author associations/);
   assert.match(stderr, /MAINTAINER/);
 });
+
+test("the pull request's own author is never refused by the allowlist", async () => {
+  // GitHub reports the same person differently by event: a review comment on a
+  // branch they authored comes through as CONTRIBUTOR, where a conversation
+  // comment on the same pull request is MEMBER. An allowlist without CONTRIBUTOR
+  // therefore refused an author's own inline request until this case existed.
+  const { exitCode, outputs } = await decide({
+    EVENT_NAME: 'pull_request_review_comment',
+    COMMENT_BODY: '@tessl-code-review',
+    COMMENT_ASSOCIATION: 'CONTRIBUTOR',
+    COMMENT_AUTHOR: 'author',
+    PR_AUTHOR: 'author',
+    ALLOWED_ASSOCIATIONS: 'OWNER,MEMBER,COLLABORATOR',
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(outputs, /requested=true/);
+});
+
+test('someone else with an unaccepted association is still refused', async () => {
+  const { outputs, stdout } = await decide({
+    EVENT_NAME: 'pull_request_review_comment',
+    COMMENT_BODY: '@tessl-code-review',
+    COMMENT_ASSOCIATION: 'CONTRIBUTOR',
+    COMMENT_AUTHOR: 'someone-else',
+    PR_AUTHOR: 'author',
+    ALLOWED_ASSOCIATIONS: 'OWNER,MEMBER,COLLABORATOR',
+  });
+
+  assert.match(outputs, /requested=false/);
+  assert.match(stdout, /association is not one this caller accepts/);
+});
+
+test('an author exemption needs a real login on both sides', async () => {
+  // An absent author must not match an absent pull-request author and admit
+  // everything: two empty values are not the same person.
+  const { outputs } = await decide({
+    EVENT_NAME: 'issue_comment',
+    COMMENT_BODY: '@tessl-code-review',
+    COMMENT_ASSOCIATION: 'NONE',
+    COMMENT_AUTHOR: '',
+    PR_AUTHOR: '',
+    ALLOWED_ASSOCIATIONS: 'OWNER',
+  });
+
+  assert.match(outputs, /requested=false/);
+});
+
+test('the author exemption ignores login casing', async () => {
+  const { outputs } = await decide({
+    EVENT_NAME: 'pull_request_review_comment',
+    COMMENT_BODY: '@tessl-code-review',
+    COMMENT_ASSOCIATION: 'CONTRIBUTOR',
+    COMMENT_AUTHOR: 'Author',
+    PR_AUTHOR: 'author',
+    ALLOWED_ASSOCIATIONS: 'OWNER,MEMBER,COLLABORATOR',
+  });
+
+  assert.match(outputs, /requested=true/);
+});
