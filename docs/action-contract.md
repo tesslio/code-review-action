@@ -113,8 +113,9 @@ notice and the review proceeds; nothing about a review depends on it. A run
 started by `pull_request` or `workflow_dispatch` has no comment to answer and
 reacts to nothing.
 
-Deciding whether a comment is a request for review remains the caller's: the
-Action reacts to the comment the caller admitted.
+A comment the Action does not admit is never acknowledged: the decision described
+under "Who decides what" happens first, and a reaction is one of the things it
+gates.
 
 ## Comment protocol
 

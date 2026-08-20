@@ -19,12 +19,11 @@ green by construction. Enforcement sits at merge time, where blocking is
 routine and the remedy is obvious, rather than at release time, where it
 would be a machine veto over a human decision.
 
-Tags are immutable: one release per tag, never moved and never re-pointed. A
-dispatch naming an existing tag fails, and that failure is the policy working.
-There are no moving version tags; the supported reference for a caller is
-always the release commit SHA quoted in the notes, which is also what the
-setup plugin resolves and pins. Making a new release the Marketplace-listed
-version is a manual checkbox on the release page.
+An exact tag is immutable: one release per exact tag, never moved and never
+re-pointed. A dispatch naming an existing exact tag fails, and that failure is
+the policy working. The major tag is the one exception, and the section below
+states what it means. Making a new release the Marketplace-listed version is a
+manual checkbox on the release page.
 
 ## Tags
 

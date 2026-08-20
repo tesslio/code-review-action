@@ -212,16 +212,22 @@ test('documents the result marker a consumer is entitled to rely on', () => {
 
 test('shows a copyable workflow for each supported trigger', () => {
   assert.match(readme, /on:\n  issue_comment:\n    types: \[created\]/);
-  assert.match(readme, /author_association/);
+  // The actor check is an input the Action enforces, not a condition each
+  // caller writes for itself.
+  assert.match(readme, /allowed-associations: OWNER,MEMBER,COLLABORATOR/);
+  assert.doesNotMatch(readme, /author_association/);
   assert.match(readme, /types: \[opened, reopened, ready_for_review, synchronize\]/);
   assert.match(readme, /cancel-in-progress: true/);
   const references = [
     ...readme.matchAll(/uses: tesslio\/code-review-action@(\S+)/g),
   ];
   assert.equal(references.length, 5);
+  // Every example shows the moving major tag, which is the recommended
+  // reference; pinning a SHA is documented in prose as the alternative.
   for (const reference of references) {
-    assert.equal(reference[1], '<full-commit-sha>');
+    assert.equal(reference[1], 'v1');
   }
+  assert.match(readme, /pin the\s+full commit SHA a release's notes provide/);
   // The review plugin is referenced as `tessl/code-review`, which is not an
   // Action reference and must never appear in a `uses:` example.
   assert.doesNotMatch(readme, /uses: tesslio\/code-review@/);
