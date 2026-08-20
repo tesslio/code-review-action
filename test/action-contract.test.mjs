@@ -232,3 +232,37 @@ test('shows a copyable workflow for each supported trigger', () => {
   // Action reference and must never appear in a `uses:` example.
   assert.doesNotMatch(readme, /uses: tesslio\/code-review@/);
 });
+
+test('a release tag has to be a semantic version, and a new one', async () => {
+  const workflow = await readFile(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  // The shipped pattern, exercised rather than eyeballed: it guards a step that
+  // force-moves a ref, so the values it rejects matter as much as the ones it
+  // takes.
+  const pattern = /grep -qE '(\^v[^']+)'/.exec(workflow)?.[1];
+  assert.ok(pattern, 'expected a tag grammar in the release workflow');
+  const grammar = new RegExp(pattern);
+  for (const tag of ['v1', 'v1.2', 'v1.2.3', 'v0.1.0', 'v10.20.30']) {
+    assert.ok(grammar.test(tag), tag);
+  }
+  for (const tag of [
+    'release.2025',
+    'v1/../main',
+    'v01.2.3',
+    'v1.02.3',
+    'v1.2.3.4',
+    'main',
+    'v',
+    'v1.2.3-rc.1',
+  ]) {
+    assert.ok(!grammar.test(tag), tag);
+  }
+  // An existing exact tag is refused before the release is created, because
+  // `gh release create` would publish against that tag and ignore --target.
+  // The command, not the comment above the guard that also names it.
+  const create = workflow.indexOf('\n          gh release create');
+  const guard = workflow.indexOf('already exists; an exact tag is never moved');
+  assert.ok(guard > 0 && guard < create);
+});

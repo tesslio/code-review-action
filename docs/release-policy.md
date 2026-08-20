@@ -40,12 +40,22 @@ A caller that wants immutability pins the exact tag's commit SHA instead, and
 accepts that updates need a deliberate bump. Both are supported; only one of them
 can be fixed remotely.
 
+A moving tag is a trust boundary, so it has to be protected like one. Whoever can
+move `v1` can change the code every caller on it runs, with that caller's secrets
+and token. Two settings carry that weight and must stay in place: a ruleset over
+`refs/tags/v*` restricting who may update a tag to the accounts that cut
+releases, and the requirement that a release is dispatched from `main`, which this
+workflow enforces. A caller unwilling to rest on that pins a SHA, which is why
+both references stay supported.
+
 ## Pre-release validation against an unreleased CLI
 
-Integration happens on `main` itself: the monorepo's caller rides
-`tesslio/code-review-action@main` with the internal `cli-channel: head`
-input, so every merged change here is exercised against the newest merged
-Tessl CLI on real pull requests before any release includes it. Neither the
-moving `main` ref nor `cli-channel` is a supported reference or input for
-external callers: the supported references are the release commit SHAs
-described above.
+Integration happens on `main` itself. A Tessl-operated caller rides
+`tesslio/code-review-action@main` with the internal `cli-channel` input, so every
+merged change here is exercised against the newest merged Tessl CLI on real pull
+requests before any release includes it.
+
+That arrangement is not a supported one. Neither the `main` ref nor `cli-channel`
+is a supported reference or input for a caller outside Tessl. The supported
+references are the two the Tags section describes: the moving major tag, and an
+exact release's commit SHA.
