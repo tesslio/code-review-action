@@ -19,19 +19,53 @@ green by construction. Enforcement sits at merge time, where blocking is
 routine and the remedy is obvious, rather than at release time, where it
 would be a machine veto over a human decision.
 
-Tags are immutable: one release per tag, never moved and never re-pointed. A
-dispatch naming an existing tag fails, and that failure is the policy working.
-There are no moving version tags; the supported reference for a caller is
-always the release commit SHA quoted in the notes, which is also what the
-setup plugin resolves and pins. Making a new release the Marketplace-listed
-version is a manual checkbox on the release page.
+An exact tag is immutable: one release per exact tag, never moved and never
+re-pointed. A dispatch naming an existing exact tag fails, and that failure is
+the policy working. A dispatch naming a bare major fails too, because that tag is
+the moving one and a release cannot own a tag a later release takes. The major tag is the one exception, and the section below
+states what it means. Making a new release the Marketplace-listed version is a
+manual checkbox on the release page.
+
+## Tags
+
+An exact tag — `v1.2.0` — is immutable. It names one commit forever, and a
+dispatch naming an existing exact tag fails rather than moving it.
+
+The major tag — `v1` — moves. Cutting a release repoints it at that release's
+commit, so a caller on `v1` is on the newest 1.x revision without editing its
+workflow. That is the recommended reference, and it is what lets a fix reach a
+caller at all: a caller pinned to a commit SHA keeps the revision it pinned until
+someone changes it.
+
+A caller that wants immutability pins the exact tag's commit SHA instead, and
+accepts that updates need a deliberate bump. Both are supported; only one of them
+can be fixed remotely.
+
+If a release is created and its major tag cannot be moved, the workflow fails
+saying so and puts the command that finishes it in the run summary. That command
+is the same conditional the workflow itself runs: it looks the ref up, then makes
+one request — create when it is confirmed absent, move when it is there — so
+running it reports a failure only when something really failed. Re-dispatching will not:
+the exact tag now exists, and this workflow refuses an existing one. Until the
+major tag moves, a caller on it is on the previous revision, which is why that
+failure is loud rather than a warning.
+
+A moving tag is a trust boundary, so it has to be protected like one. Whoever can
+move `v1` can change the code every caller on it runs, with that caller's secrets
+and token. Two settings carry that weight and must stay in place: a ruleset over
+`refs/tags/v*` restricting who may update a tag to the accounts that cut
+releases, and the requirement that a release is dispatched from `main`, which this
+workflow enforces. A caller unwilling to rest on that pins a SHA, which is why
+both references stay supported.
 
 ## Pre-release validation against an unreleased CLI
 
-Integration happens on `main` itself: the monorepo's caller rides
-`tesslio/code-review-action@main` with the internal `cli-channel: head`
-input, so every merged change here is exercised against the newest merged
-Tessl CLI on real pull requests before any release includes it. Neither the
-moving `main` ref nor `cli-channel` is a supported reference or input for
-external callers: the supported references are the release commit SHAs
-described above.
+Integration happens on `main` itself. A Tessl-operated caller rides
+`tesslio/code-review-action@main` with the internal `cli-channel` input, so every
+merged change here is exercised against the newest merged Tessl CLI on real pull
+requests before any release includes it.
+
+That arrangement is not a supported one. Neither the `main` ref nor `cli-channel`
+is a supported reference or input for a caller outside Tessl. The supported
+references are the two the Tags section describes: the moving major tag, and an
+exact release's commit SHA.

@@ -35,12 +35,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: tesslio/code-review-action@<full-commit-sha>
+      - uses: tesslio/code-review-action@v1
         with:
           tessl-token: ${{ secrets.TESSL_TOKEN }}
 ```
 
-Pin the Action to a full commit SHA. A release's notes provide the SHA to use.
+`v1` is the major tag. It moves to each 1.x release, so a fix reaches the
+repository without editing the workflow. To freeze the revision instead, pin the
+full commit SHA a release's notes provide, and accept that updates then need a
+deliberate bump.
+
 The Action checks out the pull-request head itself, so the calling job does not
 need a separate checkout step.
 
@@ -54,7 +58,7 @@ The default configuration runs the `standard` profile in advisory mode.
 
 ```yaml
 - id: review
-  uses: tesslio/code-review-action@<full-commit-sha>
+  uses: tesslio/code-review-action@v1
   with:
     tessl-token: ${{ secrets.TESSL_TOKEN }}
     profile: standard
@@ -118,28 +122,41 @@ concurrency:
 
 jobs:
   review:
+    # A coarse prefilter, and only that: it keeps a runner from starting for
+    # every comment in the repository. The Action decides whether a comment
+    # actually requests a review.
     if: >-
       github.event.issue.pull_request != null &&
       github.event.issue.state == 'open' &&
-      contains(github.event.comment.body, '@tessl-code-review') &&
-      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
+      contains(github.event.comment.body, '@tessl-code-review')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: tesslio/code-review-action@<full-commit-sha>
+      - uses: tesslio/code-review-action@v1
         with:
           tessl-token: ${{ secrets.TESSL_TOKEN }}
+          allowed-associations: OWNER,MEMBER,COLLABORATOR
 ```
 
-The `author_association` condition is the actor check, and it is the caller's
-responsibility. An `issue_comment` run holds the repository write permissions
-and the `TESSL_TOKEN` secret, and anyone who can comment on a pull request can
-start one, so without a condition of this kind an outside commenter can spend
-the token at will. Tighten the list to suit the repository, or replace it with a
-step that queries the commenter's permission level. The `issue.state` condition
-keeps a stray mention on a closed or merged pull request from starting a run
-that can only fail. `cancel-in-progress: false` keeps a requested review from
-being canceled by the next request.
+`allowed-associations` is the actor check, and choosing it is the caller's
+responsibility even though the Action enforces it. An `issue_comment` run holds
+the repository write permissions and the `TESSL_TOKEN` secret, and anyone who can
+comment on a pull request can start one, so without this input an outside
+commenter can spend the token at will. Tighten the list to suit the repository,
+or leave it out only if any commenter may request a review.
+
+The condition above is deliberately loose. A workflow expression cannot match a
+token boundary, so it tests for the handle anywhere in the body and the Action
+applies the exact rule: the handle as a whole token, case-insensitively, so
+`@tessl-code-reviewer` is not a request. A comment the Action does not admit ends
+the run with nothing published and `status: not-requested`.
+
+The `issue.state` condition belongs in that prefilter: the Action refuses to
+review a closed or merged pull request, so without it a stray mention there starts
+a run that fails, and fails without explaining itself on the pull request. The
+pull-request number is never resolved for a closed one, so the failure notice has
+nothing to address and is not published either. `cancel-in-progress: false` keeps
+a requested review from being canceled by the next request.
 
 The concurrency group is the same one the every-commit workflow below uses, so
 a repository running both never has two runs publishing for the same pull
@@ -171,7 +188,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: tesslio/code-review-action@<full-commit-sha>
+      - uses: tesslio/code-review-action@v1
         with:
           tessl-token: ${{ secrets.TESSL_TOKEN }}
 ```
@@ -276,7 +293,7 @@ Later steps in the same job can consume the Action's structured result:
 
 ```yaml
 - id: review
-  uses: tesslio/code-review-action@<full-commit-sha>
+  uses: tesslio/code-review-action@v1
   with:
     tessl-token: ${{ secrets.TESSL_TOKEN }}
 

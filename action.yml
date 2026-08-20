@@ -42,6 +42,13 @@ inputs:
     description: Pull-request number for events without pull-request context
     required: false
     default: ''
+  allowed-associations:
+    description: >-
+      Comma-separated GitHub author associations whose comments may request a
+      review, for example OWNER,MEMBER,COLLABORATOR. Empty accepts any author.
+      Applies to comment events only.
+    required: false
+    default: ''
   cli-version:
     description: Tessl CLI version to install; "latest" tracks the current release
     required: false
@@ -58,7 +65,7 @@ inputs:
 outputs:
   status:
     description: Terminal Action status
-    value: ${{ steps.finalize.outputs.status }}
+    value: ${{ steps.finalize.outputs.status || steps.request.outputs.status }}
   head-sha:
     description: Exact reviewed pull-request head SHA
     value: ${{ steps.pr.outputs['head-sha'] }}
@@ -75,12 +82,26 @@ outputs:
 runs:
   using: composite
   steps:
-    # First, before anything visible happens: the reaction is the only signal
-    # that reaches the person at the moment they asked, and the check run below
-    # already tells them a review is running. Comment events only; any failure
-    # is a notice, never a failed review.
+    # First, and before anything a reader can see: whether this event asks for a
+    # review at all. A caller's `if:` is a coarse prefilter that saves a runner;
+    # the exact rule lives here so it is one rule rather than one per caller.
+    - name: Decide whether a review was requested
+      id: request
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        COMMENT_BODY: ${{ github.event.comment.body }}
+        COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+        ALLOWED_ASSOCIATIONS: ${{ inputs['allowed-associations'] }}
+      run: node "$GITHUB_ACTION_PATH/src/decide-request.mjs"
+
+    # Answers the person who asked, before the check run below becomes the only
+    # other visible sign that anything is happening. A failure here is a notice,
+    # never a failed review.
     - name: Acknowledge the triggering comment
-      if: github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment'
+      if: >-
+        steps.request.outputs.requested == 'true' &&
+        (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment')
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -90,6 +111,7 @@ runs:
       run: node "$GITHUB_ACTION_PATH/src/acknowledge-comment.mjs"
 
     - name: Validate Action inputs
+      if: steps.request.outputs.requested == 'true'
       shell: bash
       env:
         TESSL_TOKEN_INPUT: ${{ inputs['tessl-token'] }}
@@ -114,6 +136,7 @@ runs:
 
     - name: Resolve pull request
       id: pr
+      if: steps.request.outputs.requested == 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -126,6 +149,7 @@ runs:
 
     - name: Start review check run
       id: check
+      if: steps.request.outputs.requested == 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -136,6 +160,7 @@ runs:
       run: node "$GITHUB_ACTION_PATH/src/start-check-run.mjs"
 
     - name: Check out pull-request head
+      if: steps.request.outputs.requested == 'true'
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         repository: ${{ steps.pr.outputs['head-repository'] }}
@@ -146,6 +171,7 @@ runs:
 
     - name: Install Tessl CLI
       id: setup
+      if: steps.request.outputs.requested == 'true'
       # Past v2, which sends the version into the download URL unencoded: a
       # release carrying SemVer build metadata (`1.2.3+test.…`) then 403s,
       # which is every prerelease build a caller might pin for validation.
@@ -155,7 +181,7 @@ runs:
         token: ${{ inputs['tessl-token'] }}
 
     - name: Switch Tessl CLI release channel
-      if: inputs['cli-channel'] != ''
+      if: steps.request.outputs.requested == 'true' && inputs['cli-channel'] != ''
       shell: bash
       env:
         TESSL_TOKEN: ${{ inputs['tessl-token'] }}
@@ -176,6 +202,7 @@ runs:
     # fails deep in argument parsing and every review dies with a message that
     # names neither cause nor fix.
     - name: Check the installed CLI can publish
+      if: steps.request.outputs.requested == 'true'
       shell: bash
       run: |
         set -euo pipefail
@@ -186,6 +213,7 @@ runs:
 
     - name: Run Tessl Code Review
       id: review
+      if: steps.request.outputs.requested == 'true'
       shell: bash
       working-directory: ${{ github.workspace }}/.tessl-code-review/workspace
       env:
@@ -200,7 +228,7 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/src/run-review.sh"
 
     - name: Build public result
-      if: always() && steps.review.outputs['artifact-path'] != ''
+      if: always() && steps.request.outputs.requested == 'true' && steps.review.outputs['artifact-path'] != ''
       shell: bash
       env:
         REVIEW_OUTPUT: ${{ steps.review.outputs['result-path'] }}
@@ -212,7 +240,7 @@ runs:
       run: node "$GITHUB_ACTION_PATH/src/build-public-artifact.mjs"
 
     - name: Upload public result
-      if: always() && steps.review.outputs['artifact-path'] != ''
+      if: always() && steps.request.outputs.requested == 'true' && steps.review.outputs['artifact-path'] != ''
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ${{ steps.review.outputs['artifact-name'] }}
@@ -220,7 +248,7 @@ runs:
         if-no-files-found: warn
 
     - name: Publish visible technical failure
-      if: always() && steps.review.outputs['exit-code'] != '0'
+      if: always() && steps.request.outputs.requested == 'true' && steps.review.outputs['exit-code'] != '0'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}
@@ -231,7 +259,7 @@ runs:
 
     - name: Apply review conclusion
       id: finalize
-      if: always()
+      if: always() && steps.request.outputs.requested == 'true'
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}

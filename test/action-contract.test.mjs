@@ -26,9 +26,27 @@ test('exposes one product-level Action contract', () => {
     'lenses',
     'mode',
     'pr-number',
+    'allowed-associations',
     'cli-version',
     'cli-channel',
   ]);
+});
+
+test('decides a review request before anything visible happens', () => {
+  const steps = [...action.matchAll(/^    - name: (.+)$/gm)].map(
+    (match) => match[1],
+  );
+  assert.equal(steps[0], 'Decide whether a review was requested');
+  assert.equal(steps[1], 'Acknowledge the triggering comment');
+  // Every later step is gated on the decision, so a comment that asked for
+  // nothing leaves no check run, no reaction and no review behind it.
+  const gated = action.split('- name:').filter((step) =>
+    /steps\.request\.outputs\.requested == 'true'/.test(step),
+  );
+  assert.equal(gated.length, steps.length - 1);
+  // Advertised as supported configuration, so it belongs in the Inputs table.
+  assert.match(contract, /^\| `allowed-associations` \| no \|/m);
+  assert.match(contract, /## Who decides what/);
 });
 
 test('rejects an effort outside the values it advertises', () => {
@@ -122,10 +140,11 @@ test('documents approval as the public success status', () => {
 
 test('publishes a failure notice only when the review itself failed', () => {
   // The CLI reviews and publishes in one invocation, so its exit code is the
-  // only signal here; a no-match result exits zero and leaves no notice.
+  // only signal here; a no-match result exits zero and leaves no notice, and a
+  // run that was never a review request leaves none either.
   assert.match(
     action,
-    /if: always\(\) && steps\.review\.outputs\['exit-code'\] != '0'/,
+    /if: always\(\) && steps\.request\.outputs\.requested == 'true' && steps\.review\.outputs\['exit-code'\] != '0'/,
   );
   assert.match(contract, /`skipped-no-matching-lenses`/);
   assert.match(contract, /`no-matching-lenses`/);
@@ -193,17 +212,86 @@ test('documents the result marker a consumer is entitled to rely on', () => {
 
 test('shows a copyable workflow for each supported trigger', () => {
   assert.match(readme, /on:\n  issue_comment:\n    types: \[created\]/);
-  assert.match(readme, /author_association/);
+  // The actor check is an input the Action enforces, not a condition each
+  // caller writes for itself.
+  assert.match(readme, /allowed-associations: OWNER,MEMBER,COLLABORATOR/);
+  assert.doesNotMatch(readme, /author_association/);
   assert.match(readme, /types: \[opened, reopened, ready_for_review, synchronize\]/);
   assert.match(readme, /cancel-in-progress: true/);
   const references = [
     ...readme.matchAll(/uses: tesslio\/code-review-action@(\S+)/g),
   ];
   assert.equal(references.length, 5);
+  // Every example shows the moving major tag, which is the recommended
+  // reference; pinning a SHA is documented in prose as the alternative.
   for (const reference of references) {
-    assert.equal(reference[1], '<full-commit-sha>');
+    assert.equal(reference[1], 'v1');
   }
+  assert.match(readme, /pin the\s+full commit SHA a release's notes provide/);
   // The review plugin is referenced as `tessl/code-review`, which is not an
   // Action reference and must never appear in a `uses:` example.
   assert.doesNotMatch(readme, /uses: tesslio\/code-review@/);
+});
+
+test('a release tag has to be a semantic version, and a new one', async () => {
+  const workflow = await readFile(
+    new URL('../.github/workflows/release.yml', import.meta.url),
+    'utf8',
+  );
+  // The shipped pattern, exercised rather than eyeballed: it guards a step that
+  // force-moves a ref, so the values it rejects matter as much as the ones it
+  // takes.
+  const pattern = /grep -qE '(\^v[^']+)'/.exec(workflow)?.[1];
+  assert.ok(pattern, 'expected a tag grammar in the release workflow');
+  const grammar = new RegExp(pattern);
+  for (const tag of ['v1.2', 'v1.2.3', 'v0.1.0', 'v10.20.30']) {
+    assert.ok(grammar.test(tag), tag);
+  }
+  for (const tag of [
+    'release.2025',
+    'v1/../main',
+    'v01.2.3',
+    'v1.02.3',
+    'v1.2.3.4',
+    'main',
+    'v',
+    'v1.2.3-rc.1',
+    // A bare major is the moving tag, never an exact release.
+    'v1',
+  ]) {
+    assert.ok(!grammar.test(tag), tag);
+  }
+
+  // The guard is the ref lookup and its failure path, not the sentence it
+  // prints: a test that only found the message would pass with the lookup gone.
+  // The command, not the comment above it that also names it.
+  const create = workflow.indexOf('\n          gh release create');
+  const lookup = workflow.indexOf('git/matching-refs/tags/$TAG');
+  assert.ok(lookup > 0 && lookup < create);
+  const guard = workflow.slice(lookup, create);
+  // Absence is a value from this endpoint, so a failed call must stop the
+  // release rather than read as proof the tag is free.
+  assert.match(guard, /Could not determine whether \$TAG already exists/);
+  assert.match(guard, /if \[ "\$existing" != "0" \]; then/);
+  assert.match(guard, /already exists; an exact tag is never moved/);
+  assert.equal((guard.match(/exit 1/g) ?? []).length, 2);
+
+  // The major tag is created or moved, decided by a confirmed lookup, so
+  // neither the run nor the remediation it prints reports a failure it expected.
+  const retag = workflow.slice(workflow.indexOf('MAJOR="v$('));
+  assert.match(retag, /existing_major="\$\(/);
+  assert.match(retag, /if \[ "\$existing_major" = "0" \]; then/);
+  assert.match(retag, /gh api -X POST/);
+  assert.match(retag, /elif \[ -n "\$existing_major" \]; then/);
+  assert.match(retag, /gh api -X PATCH/);
+  // The printed recovery is the same conditional, not two commands one of which
+  // always fails by design.
+  assert.match(
+    retag,
+    /echo 'existing="\$\(gh api "repos\/\$REPO\/git\/matching-refs/,
+  );
+  // And fails closed the same way: a failed lookup in the printed recovery must
+  // stop, not fall through to a force-move on an unknown state.
+  assert.match(retag, /Lookup failed; leaving \$MAJOR alone/);
+  assert.match(retag, /echo '  exit 1'/);
 });
