@@ -3,11 +3,11 @@
 /**
  * Decide whether the event that started this run is a request for a review.
  *
- * A comment requests a review by mentioning the review handle. That decision
- * used to belong to every caller, which meant one rule written four times in two
- * languages, disagreeing on case, on token boundaries, and on whether a comment
- * body reached the matcher intact. It belongs here: a caller cannot get it wrong,
- * and changing it changes it everywhere.
+ * A comment requests a review by mentioning the review handle. Deciding that in a
+ * caller means every caller reimplements one rule in a workflow expression plus a
+ * shell step, where case, token boundaries and shell quoting are each easy to get
+ * subtly wrong. It belongs here: a caller cannot get it wrong, and changing it
+ * changes it for every caller at once.
  *
  * What a caller keeps is the coarse `if:` that stops GitHub starting a runner for
  * every comment in the repository. A workflow expression cannot match a token
