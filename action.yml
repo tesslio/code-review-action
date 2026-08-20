@@ -46,7 +46,8 @@ inputs:
     description: >-
       Comma-separated GitHub author associations whose comments may request a
       review, for example OWNER,MEMBER,COLLABORATOR. Empty accepts any author.
-      Applies to comment events only.
+      Applies to comment events only, and never refuses the pull request's own
+      author.
     required: false
     default: ''
   cli-version:
@@ -92,6 +93,11 @@ runs:
         EVENT_NAME: ${{ github.event_name }}
         COMMENT_BODY: ${{ github.event.comment.body }}
         COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+        COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+        # The pull request's own author, from whichever payload carried it: an
+        # inline review comment nests the pull request, a conversation comment
+        # nests the issue.
+        PR_AUTHOR: ${{ github.event.pull_request.user.login || github.event.issue.user.login }}
         ALLOWED_ASSOCIATIONS: ${{ inputs['allowed-associations'] }}
       run: node "$GITHUB_ACTION_PATH/src/decide-request.mjs"
 

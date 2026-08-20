@@ -63,7 +63,7 @@ function parseAllowed(raw) {
   return new Set(values);
 }
 
-function decide({ eventName, body, association, allowed }) {
+function decide({ eventName, body, association, allowed, author, prAuthor }) {
   if (!COMMENT_EVENTS.has(eventName)) return { requested: true };
   if (!MENTION.test(body ?? '')) {
     return {
@@ -71,7 +71,17 @@ function decide({ eventName, body, association, allowed }) {
       reason: `the comment does not mention ${HANDLE} as a whole token`,
     };
   }
-  if (allowed !== undefined && !allowed.has((association ?? '').toUpperCase())) {
+  if (allowed === undefined) return { requested: true };
+  // The author of a pull request may always ask for it to be reviewed. They
+  // already decide what is in it, so an allowlist cannot be protecting anything
+  // by refusing them — and GitHub's own association value refuses them by
+  // accident: a `pull_request_review_comment` payload reports the author of the
+  // branch's commits as CONTRIBUTOR, where the same person on the same pull
+  // request is MEMBER in an `issue_comment` payload and in the REST API.
+  if (author !== undefined && author !== '' && author === prAuthor) {
+    return { requested: true };
+  }
+  if (!allowed.has((association ?? '').toUpperCase())) {
     return {
       requested: false,
       reason: `the comment author's association is not one this caller accepts`,
@@ -85,6 +95,8 @@ const decision = decide({
   body: process.env.COMMENT_BODY,
   association: process.env.COMMENT_ASSOCIATION,
   allowed: parseAllowed(process.env.ALLOWED_ASSOCIATIONS),
+  author: process.env.COMMENT_AUTHOR,
+  prAuthor: process.env.PR_AUTHOR,
 });
 
 if (!decision.requested) {
