@@ -127,6 +127,7 @@ jobs:
     # actually requests a review.
     if: >-
       github.event.issue.pull_request != null &&
+      github.event.issue.state == 'open' &&
       contains(github.event.comment.body, '@tessl-code-review')
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -150,9 +151,11 @@ applies the exact rule: the handle as a whole token, case-insensitively, so
 `@tessl-code-reviewer` is not a request. A comment the Action does not admit ends
 the run with nothing published and `status: not-requested`.
 
-A mention on a closed or merged pull request starts a run that fails, because the
-Action refuses to review one. `cancel-in-progress: false` keeps a requested
-review from being canceled by the next request.
+The `issue.state` condition belongs in that prefilter: the Action refuses to
+review a closed or merged pull request, so without it a stray mention there starts
+a run that fails and posts a failure notice rather than quietly doing nothing.
+`cancel-in-progress: false` keeps a requested review from being canceled by the
+next request.
 
 The concurrency group is the same one the every-commit workflow below uses, so
 a repository running both never has two runs publishing for the same pull
