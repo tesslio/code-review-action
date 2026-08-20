@@ -288,6 +288,10 @@ test('a release tag has to be a semantic version, and a new one', async () => {
   // always fails by design.
   assert.match(
     retag,
-    /echo 'if \[ "\$\(gh api "repos\/\$REPO\/git\/matching-refs/,
+    /echo 'existing="\$\(gh api "repos\/\$REPO\/git\/matching-refs/,
   );
+  // And fails closed the same way: a failed lookup in the printed recovery must
+  // stop, not fall through to a force-move on an unknown state.
+  assert.match(retag, /Lookup failed; leaving \$MAJOR alone/);
+  assert.match(retag, /echo '  exit 1'/);
 });

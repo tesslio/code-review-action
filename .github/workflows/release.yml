@@ -135,7 +135,12 @@ jobs:
               echo
               echo '```bash'
               echo "REPO=$GITHUB_REPOSITORY MAJOR=$MAJOR SHA=$SHA"
-              echo 'if [ "$(gh api "repos/$REPO/git/matching-refs/tags/$MAJOR" --jq "[.[] | select(.ref == \"refs/tags/$MAJOR\")] | length")" = "0" ]; then'
+              echo 'existing="$(gh api "repos/$REPO/git/matching-refs/tags/$MAJOR" \'
+              echo '  --jq "[.[] | select(.ref == \"refs/tags/$MAJOR\")] | length")" || {'
+              echo '  echo "Lookup failed; leaving $MAJOR alone." >&2'
+              echo '  exit 1'
+              echo '}'
+              echo 'if [ "$existing" = "0" ]; then'
               echo '  gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/$MAJOR" -f sha="$SHA"'
               echo 'else'
               echo '  gh api -X PATCH "repos/$REPO/git/refs/tags/$MAJOR" -f sha="$SHA" -F force=true'
