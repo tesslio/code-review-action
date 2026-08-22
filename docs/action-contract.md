@@ -12,7 +12,7 @@ The supported entry point is `action.yml`.
 | `effort` | no | Reasoning effort for every review lens: `low`, `medium` or `high`. Overrides any effort the profile sets, including a per-lens one. Empty sends none, leaving the installed CLI to resolve it from the profile and the model's own default. A value outside the three is rejected before the review starts. |
 | `mode` | no | `advisory` or `gate`. Defaults to `advisory`. |
 | `pr-number` | no | Open pull-request number for an event without pull-request context. |
-| `approver-logins` | no | Comment-author logins whose comments may request an approval, for example `kikimora-dev[bot]`, separated by commas or newlines. Empty permits none. Governs approval requests only, and a named login is admitted whatever `allowed-associations` says — see below. |
+| `approver-logins` | no | Comment-author logins whose comments may request an approval, for example `kikimora-dev[bot]`, separated by commas or newlines. Empty permits none. A named login is admitted whatever `allowed-associations` says, for a review as well as an approval — see below. |
 | `allowed-associations` | no | Comma-separated GitHub author associations whose comments may request a review, for example `OWNER,MEMBER,COLLABORATOR`. Empty accepts any author. Applies to comment events only; a comment from any other association is not a request and nothing runs. The pull request's own author is never refused, whatever the list says — see below. |
 | `cli-version` | no | Tessl CLI version to install. Defaults to `latest`, which tracks the current release; set an exact version to fix the CLI alongside the Action's own commit SHA. The selected release must publish a review and report the revision it reviewed; one that does not concludes `incompatible-cli`. |
 
@@ -56,6 +56,13 @@ two inputs contradict each other in exactly the case they exist for: an App
 comments as `NONE`, so an allowlist of human associations would refuse the App
 the caller just named — and refuse it as "no review requested", so it would get
 neither the approval it asked for nor the refusal explaining why not.
+
+That admission covers an ordinary review request from the same login, not only
+an approval. Naming a login says it may ask for the stronger of the two, and
+permitting that while refusing the weaker one would contradict itself. So
+`approver-logins` widens who may request a review, and a caller tightening
+`allowed-associations` should read the two together rather than as separate
+gates.
 
 Being named grants nothing on its own: the comment still has to ask for an
 approval, and one that asks for a review gets a review.

@@ -46,11 +46,12 @@ inputs:
     description: >-
       Comment-author logins whose comments may request an approval, for example
       kikimora-dev[bot]. Separate them with commas or newlines. Empty permits
-      none. This is the
-      only way a GitHub App can request one: an App comments with author
-      association NONE whatever its permissions, so no association names it.
-      Governs approval requests only; allowed-associations governs review
-      requests.
+      none. This is the only way a GitHub App can request one: an App comments
+      with author association NONE whatever its permissions, so no association
+      names it. Naming a login also admits it past allowed-associations, for a
+      review as well as an approval: approving is the stronger request of the
+      two, so permitting it while refusing the weaker one would contradict
+      itself.
     required: false
     default: ''
   allowed-associations:
