@@ -19,6 +19,16 @@ fi
 if [[ -n "$EFFORT" ]]; then
   args+=(--effort "$EFFORT")
 fi
+# Trimmed and empty-skipped the same way the input validation reads them, so a
+# formatted list and a bare one send the same arguments.
+if [[ -n "${APPROVER_LOGINS:-}" ]]; then
+  while IFS= read -r approver_login; do
+    approver_login="${approver_login#"${approver_login%%[![:space:]]*}"}"
+    approver_login="${approver_login%"${approver_login##*[![:space:]]}"}"
+    [[ -n "$approver_login" ]] || continue
+    args+=(--approver "$approver_login")
+  done < <(tr ',' '\n' <<< "$APPROVER_LOGINS")
+fi
 if [[ -n "$LENSES" ]]; then
   if ! jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' <<< "$LENSES" >/dev/null; then
     echo "::error::lenses must be a JSON array of non-empty strings."

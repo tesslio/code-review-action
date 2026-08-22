@@ -1,5 +1,6 @@
 import {
   KNOWN_RECEIPT_STATUSES,
+  isApprovalNotPermittedResult,
   isNoMatchingLensesResult,
 } from './result-file.mjs';
 
@@ -12,6 +13,14 @@ import {
  * turned out to name a different commit. Naming the completed states directly is
  * what lets one condition cover all three, and they cannot drift from the
  * statuses above because they are the same values.
+ *
+ * `refused-approval-request` is deliberately absent even though its run
+ * finished cleanly. This set clears the notice left by an earlier review that
+ * did not complete, and a refusal establishes nothing about the commit that
+ * notice describes: it answers a comment. Clearing on it would retract a
+ * standing report of breakage that nothing has fixed. `skipped-no-matching-
+ * lenses` stays, because that run did evaluate the change and found no lens
+ * that applies to it.
  */
 export const COMPLETED_REVIEW_STATUSES = new Set([
   'approved',
@@ -52,6 +61,14 @@ export function reviewConclusion({ mode, reviewExitCode, result, headSha }) {
 
   if (isNoMatchingLensesResult(result)) {
     return { status: 'skipped-no-matching-lenses', exitCode: 0 };
+  }
+
+  // Checked beside the no-match case and before anything that reads an outcome:
+  // both are runs that reviewed nothing on purpose, so neither has a reviewed
+  // head to identify or a verdict to gate on, and reading one as an incomplete
+  // review would fail a run that did exactly what it should.
+  if (isApprovalNotPermittedResult(result)) {
+    return { status: 'refused-approval-request', exitCode: 0 };
   }
 
   // The check run is attached to the head this Action resolved and checked out,

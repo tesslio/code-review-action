@@ -18,6 +18,7 @@ async function finalize({
   publication = { status: 'published' },
   reviewExitCode = '0',
   prNumber = '42',
+  commentId,
   headSha,
   reviewOutput,
   writableOutputs = true,
@@ -50,6 +51,7 @@ async function finalize({
           MODE: mode,
           REVIEW_EXIT_CODE: reviewExitCode,
           PR_NUMBER: prNumber,
+          ...(commentId === undefined ? {} : { COMMENT_ID: commentId }),
           ...(headSha === undefined ? {} : { HEAD_SHA: headSha }),
           REVIEW_OUTPUT:
             reviewOutput === undefined
@@ -147,6 +149,48 @@ test('a no-match result succeeds without publishing or asserting a verdict', asy
   assert.match(outputs, /status=skipped-no-matching-lenses/);
   assert.match(requests, /"conclusion":"neutral"/);
   assert.doesNotMatch(requests, /"conclusion":"success"/);
+});
+
+test('a refused approval request answers the comment that asked', async () => {
+  const { exitCode, outputs, requests } = await finalize({
+    mode: 'gate',
+    checkRunId: '987654',
+    commentId: '55',
+    result: JSON.stringify({
+      status: 'skipped',
+      reason: 'approval-not-permitted',
+      diagnostics: { durationMs: 12 },
+    }),
+    publication: undefined,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(outputs, /status=refused-approval-request/);
+  assert.match(requests, /"conclusion":"neutral"/);
+  assert.doesNotMatch(requests, /"conclusion":"success"/);
+  // The run made no review, so this comment is the only thing that reaches the
+  // pull request: without it the commenter sees a neutral check and no reason.
+  assert.match(requests, /issues\/42\/comments/);
+  assert.match(requests, /tessl-code-review:approval-refused:v1 id=55/);
+  assert.match(requests, /not permitted to approve/);
+});
+
+test('a refused approval request with no comment id still concludes', async () => {
+  // A workflow_dispatch or pull_request run carries no comment to answer, and
+  // the conclusion does not depend on one landing.
+  const { exitCode, outputs, requests } = await finalize({
+    checkRunId: '987654',
+    result: JSON.stringify({
+      status: 'skipped',
+      reason: 'approval-not-permitted',
+      diagnostics: { durationMs: 12 },
+    }),
+    publication: undefined,
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(outputs, /status=refused-approval-request/);
+  assert.doesNotMatch(requests, /approval-refused/);
 });
 
 test('concludes the check run when the step output cannot be written', async () => {

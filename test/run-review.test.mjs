@@ -14,6 +14,7 @@ async function capturedArguments({
   effort = '',
   lenses = '',
   mode = 'advisory',
+  approverLogins = '',
 }) {
   const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
   const executable = join(directory, 'tessl');
@@ -40,6 +41,7 @@ async function capturedArguments({
         MODEL: model,
         EFFORT: effort,
         LENSES: lenses,
+        APPROVER_LOGINS: approverLogins,
       },
     });
     return (await readFile(capture, 'utf8')).trim().split('\n');
@@ -81,6 +83,35 @@ test('forwards supplied model and effort overrides', async () => {
       '--json',
     ],
   );
+});
+
+test('sends one approver argument per configured login', async () => {
+  const args = await capturedArguments({
+    approverLogins: 'kikimora-dev[bot],tessl-helper[bot]',
+  });
+  assert.deepEqual(args.slice(args.indexOf('--approver'), -3), [
+    '--approver',
+    'kikimora-dev[bot]',
+    '--approver',
+    'tessl-helper[bot]',
+  ]);
+});
+
+test('reads a formatted approver list the same as a bare one', async () => {
+  // A trailing separator and padding are how a list gets written by hand and in
+  // YAML, and neither names a different set of logins.
+  assert.deepEqual(
+    await capturedArguments({
+      approverLogins: ' kikimora-dev[bot] ,  tessl-helper[bot] , ',
+    }),
+    await capturedArguments({
+      approverLogins: 'kikimora-dev[bot],tessl-helper[bot]',
+    }),
+  );
+});
+
+test('names no approver when the input is empty', async () => {
+  assert.ok(!(await capturedArguments({})).includes('--approver'));
 });
 
 test('exports a review id only for a receipt naming a published review', async () => {

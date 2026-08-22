@@ -26,6 +26,7 @@ test('exposes one product-level Action contract', () => {
     'lenses',
     'mode',
     'pr-number',
+    'approver-logins',
     'allowed-associations',
     'cli-version',
     'cli-channel',
@@ -46,6 +47,7 @@ test('decides a review request before anything visible happens', () => {
   assert.equal(gated.length, steps.length - 1);
   // Advertised as supported configuration, so it belongs in the Inputs table.
   assert.match(contract, /^\| `allowed-associations` \| no \|/m);
+  assert.match(contract, /^\| `approver-logins` \| no \|/m);
   assert.match(contract, /## Who decides what/);
   // The author exemption must not reach an ordinary issue's opener: they are the
   // author of an issue, not of a pull request, and would otherwise bypass the
@@ -57,6 +59,28 @@ test('decides a review request before anything visible happens', () => {
   assert.match(
     decide,
     /github\.event\.issue\.pull_request && github\.event\.issue\.user\.login/,
+  );
+});
+
+test('rejects an approver list that was never split', () => {
+  const step = action.slice(
+    action.indexOf('name: Validate Action inputs'),
+    action.indexOf('name: Resolve pull request'),
+  );
+  // A login holds no whitespace, so one that does is a list written with the
+  // wrong separator — which would otherwise reach the CLI as a single login
+  // matching nobody, and read as the reviewer ignoring the input.
+  assert.match(step, /APPROVER_LOGINS: \$\{\{ inputs\['approver-logins'\] \}\}/);
+  assert.match(step, /approver-logins entries must be single logins/);
+  // The same input has to reach the step that builds the CLI arguments, or the
+  // list validates and then names nobody.
+  const review = action.slice(
+    action.indexOf('name: Run Tessl Code Review'),
+    action.indexOf('name: Build public result'),
+  );
+  assert.match(
+    review,
+    /APPROVER_LOGINS: \$\{\{ inputs\['approver-logins'\] \}\}/,
   );
 });
 
@@ -103,12 +127,20 @@ test('checks out the reviewed head without persisted credentials', () => {
 test('the caller chooses the CLI version, and a mismatch is detected', () => {
   // The CLI is no longer pinned by this Action, so improvements reach callers
   // without an Action release. What replaces the pin is detection: an installed
-  // CLI that cannot publish has to fail by name, before the review runs, rather
-  // than deep in argument parsing.
+  // CLI missing a flag this run sends has to fail by name, before the review
+  // runs, rather than deep in argument parsing.
   assert.match(action, /version: \$\{\{ inputs\['cli-version'\] \}\}/);
-  const preflight = action.indexOf('Check the installed CLI can publish');
+  const preflight = action.indexOf('Check the installed CLI supports this run');
   assert.ok(preflight > action.indexOf('tesslio/setup-tessl'));
   assert.ok(preflight < action.indexOf('src/run-review.sh'));
+
+  // Every flag whose absence would fail in argument parsing, and only when the
+  // run will actually send it: a CLI that publishes but predates --approver
+  // would otherwise pass a --publish-only check and then die parsing arguments.
+  const step = action.slice(preflight, action.indexOf('src/run-review.sh'));
+  assert.match(step, /grep -q -- '--publish'/);
+  assert.match(step, /grep -q -- '--approver'/);
+  assert.match(step, /if \[\[ -n "\$APPROVER_LOGINS" \]\]/);
 });
 
 test('reports a check run on the reviewed head and concludes it at finalize', () => {

@@ -29,6 +29,7 @@ export async function readReviewResult(path) {
 }
 
 export const NO_MATCHING_LENSES_REASON = 'no-matching-lenses';
+export const APPROVAL_NOT_PERMITTED_REASON = 'approval-not-permitted';
 
 /**
  * A successful review that deliberately has no publishable outcome: no
@@ -39,6 +40,19 @@ export const NO_MATCHING_LENSES_REASON = 'no-matching-lenses';
 export function isNoMatchingLensesResult(result) {
   return (
     result?.status === 'skipped' && result?.reason === NO_MATCHING_LENSES_REASON
+  );
+}
+
+/**
+ * A successful run that deliberately made no review because the comment asked
+ * for an approval its author may not give. Terminal and not a failure: the run
+ * did what it should, and reviewing instead would have answered a question
+ * nobody asked.
+ */
+export function isApprovalNotPermittedResult(result) {
+  return (
+    result?.status === 'skipped' &&
+    result?.reason === APPROVAL_NOT_PERMITTED_REASON
   );
 }
 

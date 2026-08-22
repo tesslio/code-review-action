@@ -42,6 +42,18 @@ inputs:
     description: Pull-request number for events without pull-request context
     required: false
     default: ''
+  approver-logins:
+    description: >-
+      Comment-author logins whose comments may request an approval, for example
+      kikimora-dev[bot]. Separate them with commas or newlines. Empty permits
+      none. This is the only way a GitHub App can request one: an App comments
+      with author association NONE whatever its permissions, so no association
+      names it. Naming a login also admits it past allowed-associations, for a
+      review as well as an approval: approving is the stronger request of the
+      two, so permitting it while refusing the weaker one would contradict
+      itself.
+    required: false
+    default: ''
   allowed-associations:
     description: >-
       Comma-separated GitHub author associations whose comments may request a
@@ -104,6 +116,7 @@ runs:
               || (github.event.issue.pull_request && github.event.issue.user.login)
               || '' }}
         ALLOWED_ASSOCIATIONS: ${{ inputs['allowed-associations'] }}
+        APPROVER_LOGINS: ${{ inputs['approver-logins'] }}
       run: node "$GITHUB_ACTION_PATH/src/decide-request.mjs"
 
     # Answers the person who asked, before the check run below becomes the only
@@ -130,6 +143,7 @@ runs:
         LENSES: ${{ inputs.lenses }}
         MODE: ${{ inputs.mode }}
         EFFORT: ${{ inputs.effort }}
+        APPROVER_LOGINS: ${{ inputs['approver-logins'] }}
         PR_NUMBER_INPUT: ${{ inputs['pr-number'] }}
       run: |
         set -euo pipefail
@@ -144,6 +158,17 @@ runs:
         if [[ -n "$LENSES" ]]; then
           jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' <<< "$LENSES" >/dev/null || { echo "::error::lenses must be a JSON array of non-empty strings."; exit 1; }
         fi
+        # Commas and newlines both separate, so a list written either way names
+        # the same logins. Surrounding whitespace is formatting and is trimmed;
+        # whitespace left inside an entry is a separator the author expected to
+        # split on and this list did not, which would otherwise reach the CLI as
+        # one login matching nobody.
+        while IFS= read -r approver_login; do
+          approver_login="${approver_login#"${approver_login%%[![:space:]]*}"}"
+          approver_login="${approver_login%"${approver_login##*[![:space:]]}"}"
+          [[ -n "$approver_login" ]] || continue
+          [[ "$approver_login" != *[[:space:]]* ]] || { echo "::error::approver-logins entries must be single logins separated by commas or newlines, got '$approver_login'."; exit 1; }
+        done < <(tr ',' '\n' <<< "$APPROVER_LOGINS")
 
     - name: Resolve pull request
       id: pr
@@ -209,17 +234,26 @@ runs:
         } >> "$GITHUB_STEP_SUMMARY"
 
     # The CLI is no longer pinned by this Action, so an incompatible pair is
-    # possible and has to be legible. Without this, a CLI predating `--publish`
-    # fails deep in argument parsing and every review dies with a message that
-    # names neither cause nor fix.
-    - name: Check the installed CLI can publish
+    # possible and has to be legible. Without this, a CLI predating a flag this
+    # run sends fails deep in argument parsing and the review dies with a
+    # message that names neither cause nor fix. Every flag whose absence would
+    # do that is checked, and only the ones this run will actually send:
+    # `--approver` is sent only for a caller that named one.
+    - name: Check the installed CLI supports this run
       if: steps.request.outputs.requested == 'true'
       shell: bash
+      env:
+        APPROVER_LOGINS: ${{ inputs['approver-logins'] }}
       run: |
         set -euo pipefail
-        if ! tessl code review --help 2>&1 | grep -q -- '--publish'; then
-          echo "::error::The installed Tessl CLI ($(tessl --version 2>/dev/null || echo 'unknown version')) cannot publish a review. Set the cli-version input to a release that supports it, or leave it unset to track the latest."
+        cli_help="$(tessl code review --help 2>&1 || true)"
+        unsupported() {
+          echo "::error::The installed Tessl CLI ($(tessl --version 2>/dev/null || echo 'unknown version')) does not support $1. Set the cli-version input to a release that does, or leave it unset to track the latest."
           exit 1
+        }
+        grep -q -- '--publish' <<< "$cli_help" || unsupported "publishing a review (--publish)"
+        if [[ -n "$APPROVER_LOGINS" ]]; then
+          grep -q -- '--approver' <<< "$cli_help" || unsupported "the approver-logins input (--approver)"
         fi
 
     - name: Run Tessl Code Review
@@ -235,6 +269,7 @@ runs:
         EFFORT: ${{ inputs.effort }}
         LENSES: ${{ inputs.lenses }}
         MODE: ${{ inputs.mode }}
+        APPROVER_LOGINS: ${{ inputs['approver-logins'] }}
         HEAD_SHA: ${{ steps.pr.outputs['head-sha'] }}
       run: bash "$GITHUB_ACTION_PATH/src/run-review.sh"
 
@@ -280,6 +315,7 @@ runs:
         REVIEW_OUTPUT: ${{ steps.review.outputs['result-path'] }}
         CHECK_RUN_ID: ${{ steps.check.outputs['check-run-id'] }}
         PR_NUMBER: ${{ steps.pr.outputs.number }}
+        COMMENT_ID: ${{ github.event.comment.id }}
         HEAD_SHA: ${{ steps.pr.outputs['head-sha'] }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: node "$GITHUB_ACTION_PATH/src/finalize.mjs"

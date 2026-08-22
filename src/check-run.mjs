@@ -75,6 +75,17 @@ const REPORTS = {
     summary:
       'A newer commit was pushed to this pull request while the review was running, so no review was published for this commit and it carries no review verdict. The workflow run is marked failed to keep an unpublished review from reading as a pass. Nothing needs fixing: a run against the current head reviews the newer commit.',
   },
+  // Neutral in both modes, like every other status that asserts nothing about
+  // the commit. Under gate mode a neutral conclusion on a required check holds
+  // the pull request, which is the honest position: nothing reviewed this
+  // commit, so nothing has passed it.
+  'refused-approval-request': {
+    gate: 'neutral',
+    advisory: 'neutral',
+    title: 'Approval request refused',
+    summary:
+      'Tessl Code Review was asked to approve this pull request by an author who is not permitted to approve, so it made no review of this commit. Comment @tessl-code-review to have the change reviewed.',
+  },
   'skipped-no-matching-lenses': {
     gate: 'neutral',
     advisory: 'neutral',

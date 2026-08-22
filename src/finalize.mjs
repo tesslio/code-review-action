@@ -8,6 +8,7 @@ import {
   reviewConclusion,
 } from './conclusion.mjs';
 import { optionalPositiveIntegerEnv, requiredEnv } from './env.mjs';
+import { publishApprovalRefusalNotice } from './approval-refusal-notice.mjs';
 import { removeFailureNotices } from './failure-notice.mjs';
 import { GitHubCodeReviewApi } from './github-api.mjs';
 import { ResultFileError, readReviewResult } from './result-file.mjs';
@@ -60,6 +61,28 @@ async function clearStaleFailureNotices() {
   }
 }
 
+/**
+ * Answer the comment that asked for an approval it may not have.
+ *
+ * The run made no review, so this notice is the only thing that reaches the
+ * pull request: without it the commenter sees a neutral check and nothing that
+ * says why. Best effort, like every other thing published from here — the
+ * decision stands whether or not the comment lands, and a failed post is worth
+ * a notice rather than a failed job.
+ */
+async function answerRefusedApprovalRequest() {
+  const prNumber = optionalPositiveIntegerEnv('PR_NUMBER');
+  const commentId = optionalPositiveIntegerEnv('COMMENT_ID');
+  if (prNumber === undefined || commentId === undefined) return;
+  try {
+    await publishApprovalRefusalNotice({ api: githubApi(), prNumber, commentId });
+  } catch (error) {
+    console.log(
+      `::notice::The refused approval request could not be answered on the pull request: ${error}. The review was still not run.`,
+    );
+  }
+}
+
 let conclusion;
 try {
   // A step that never ran leaves its outputs empty rather than unset, so an
@@ -100,6 +123,10 @@ if (conclusion.status === 'superseded') {
 
 if (COMPLETED_REVIEW_STATUSES.has(conclusion.status)) {
   await clearStaleFailureNotices();
+}
+
+if (conclusion.status === 'refused-approval-request') {
+  await answerRefusedApprovalRequest();
 }
 
 // The check run carries the computed status even when the step output cannot

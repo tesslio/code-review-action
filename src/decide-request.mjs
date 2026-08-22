@@ -47,6 +47,24 @@ const ASSOCIATIONS = new Set([
   'NONE',
 ]);
 
+/**
+ * The comment authors a caller named as permitted to request an approval.
+ *
+ * Read here as well as by the CLI because this gate runs first: a GitHub App
+ * comments with association `NONE` whatever its permissions, so an association
+ * allowlist that omits `NONE` refuses the very App the caller named — and
+ * refuses it as "no review requested", so it gets neither the approval it asked
+ * for nor the refusal explaining why not.
+ */
+function parseApproverLogins(raw) {
+  return new Set(
+    (raw ?? '')
+      .split(/[,\n]/)
+      .map((value) => value.trim().toLowerCase())
+      .filter((value) => value.length > 0),
+  );
+}
+
 /** The associations a caller will accept, or `undefined` for any. */
 function parseAllowed(raw) {
   const values = (raw ?? '')
@@ -63,7 +81,15 @@ function parseAllowed(raw) {
   return new Set(values);
 }
 
-function decide({ eventName, body, association, allowed, author, prAuthor }) {
+function decide({
+  eventName,
+  body,
+  association,
+  allowed,
+  approvers,
+  author,
+  prAuthor,
+}) {
   if (!COMMENT_EVENTS.has(eventName)) return { requested: true };
   if (!MENTION.test(body ?? '')) {
     return {
@@ -85,6 +111,12 @@ function decide({ eventName, body, association, allowed, author, prAuthor }) {
   if (commenter !== '' && commenter === owner) {
     return { requested: true };
   }
+  // A caller that named an approver has already decided that author may ask for
+  // something stronger than a review, so refusing them at the association gate
+  // would contradict the caller's own configuration.
+  if (commenter !== '' && approvers.has(commenter)) {
+    return { requested: true };
+  }
   if (!allowed.has((association ?? '').toUpperCase())) {
     return {
       requested: false,
@@ -99,6 +131,7 @@ const decision = decide({
   body: process.env.COMMENT_BODY,
   association: process.env.COMMENT_ASSOCIATION,
   allowed: parseAllowed(process.env.ALLOWED_ASSOCIATIONS),
+  approvers: parseApproverLogins(process.env.APPROVER_LOGINS),
   author: process.env.COMMENT_AUTHOR,
   prAuthor: process.env.PR_AUTHOR,
 });
