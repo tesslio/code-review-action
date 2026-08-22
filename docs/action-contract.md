@@ -52,9 +52,21 @@ exactly as the event payload spells it, which for an App includes the `[bot]`
 suffix.
 
 Being named grants nothing on its own: the comment still has to ask for an
-approval, and one that asks for a review gets a review. A request from an author
-who is not named is refused, and the review published in its place says so, so a
-missing entry reads as a refusal rather than as a broken reviewer.
+approval, and one that asks for a review gets a review.
+
+A request from an author who is not named is refused, and **no review is run**.
+Approving is not a review, so reviewing instead would answer a question nobody
+asked and spend a full review doing it. The run concludes
+`refused-approval-request` — neutral in both modes, because nothing reviewed the
+commit and neither passing nor failing it would be true — and the Action posts
+one comment saying the request was refused and that commenting
+`@tessl-code-review` still gets a review. That comment is the only thing that
+reaches the pull request, so a missing allowlist entry reads as a refusal rather
+than as a broken reviewer.
+
+Under `gate` a neutral conclusion on a required check holds the pull request
+until something reviews the commit. That is the intended position: an unreviewed
+commit has not passed.
 
 Whether an approval reaches GitHub at all is `mode`. Under `advisory` the review
 is published as a comment whatever it concluded, so an approval granted here
@@ -271,6 +283,7 @@ with the terminal status:
 | `incompatible-cli` | failure | neutral |
 | `superseded` | neutral | neutral |
 | `skipped-no-matching-lenses` | neutral | neutral |
+| `refused-approval-request` | neutral | neutral |
 
 Advisory mode never concludes failure, so requiring the check cannot turn
 advisory mode into a gate. Breakage still reaches maintainers as a failed job

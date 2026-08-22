@@ -302,6 +302,7 @@ runs:
         REVIEW_OUTPUT: ${{ steps.review.outputs['result-path'] }}
         CHECK_RUN_ID: ${{ steps.check.outputs['check-run-id'] }}
         PR_NUMBER: ${{ steps.pr.outputs.number }}
+        COMMENT_ID: ${{ github.event.comment.id }}
         HEAD_SHA: ${{ steps.pr.outputs['head-sha'] }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: node "$GITHUB_ACTION_PATH/src/finalize.mjs"

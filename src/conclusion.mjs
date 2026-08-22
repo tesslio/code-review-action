@@ -1,5 +1,6 @@
 import {
   KNOWN_RECEIPT_STATUSES,
+  isApprovalNotPermittedResult,
   isNoMatchingLensesResult,
 } from './result-file.mjs';
 
@@ -19,6 +20,7 @@ export const COMPLETED_REVIEW_STATUSES = new Set([
   'changes-requested',
   'gate-configuration-failure',
   'skipped-no-matching-lenses',
+  'refused-approval-request',
 ]);
 
 /**
@@ -52,6 +54,14 @@ export function reviewConclusion({ mode, reviewExitCode, result, headSha }) {
 
   if (isNoMatchingLensesResult(result)) {
     return { status: 'skipped-no-matching-lenses', exitCode: 0 };
+  }
+
+  // Checked beside the no-match case and before anything that reads an outcome:
+  // both are runs that reviewed nothing on purpose, so neither has a reviewed
+  // head to identify or a verdict to gate on, and reading one as an incomplete
+  // review would fail a run that did exactly what it should.
+  if (isApprovalNotPermittedResult(result)) {
+    return { status: 'refused-approval-request', exitCode: 0 };
   }
 
   // The check run is attached to the head this Action resolved and checked out,

@@ -132,6 +132,27 @@ test('a successful no-match result is neutral and does not require publication',
   }
 });
 
+test('a refused approval request concludes as a completed run', () => {
+  // The CLI reports no outcome for it, so without its own branch this reads as
+  // a review that never named the commit it covered — a failing run for a run
+  // that did exactly what it should.
+  for (const mode of ['advisory', 'gate']) {
+    assert.deepEqual(
+      reviewConclusion(
+        valid({
+          mode,
+          result: {
+            status: 'skipped',
+            reason: 'approval-not-permitted',
+            diagnostics: { durationMs: 12 },
+          },
+        }),
+      ),
+      { status: 'refused-approval-request', exitCode: 0 },
+    );
+  }
+});
+
 test('a comment fallback fails distinctly from review findings', () => {
   assert.deepEqual(
     reviewConclusion(
@@ -224,6 +245,7 @@ test('only a completed review clears a stale failure notice', () => {
     'changes-requested',
     'gate-configuration-failure',
     'skipped-no-matching-lenses',
+    'refused-approval-request',
   ]) {
     assert.ok(COMPLETED_REVIEW_STATUSES.has(status), status);
   }

@@ -116,6 +116,21 @@ test('a no-match run is neutral and never reports approval', () => {
   }
 });
 
+test('a refused approval request is neutral and never reports approval', () => {
+  for (const mode of ['advisory', 'gate']) {
+    const report = checkRunReport({
+      mode,
+      status: 'refused-approval-request',
+    });
+    // Neutral in gate mode too: nothing reviewed this commit, so holding the
+    // pull request is the honest position rather than a passing check.
+    assert.equal(report.conclusion, 'neutral');
+    assert.match(report.title, /Approval request refused/);
+    assert.match(report.summary, /made no review/);
+    assert.doesNotMatch(report.summary, /approved/);
+  }
+});
+
 test('an unrecognized status concludes without a verdict', () => {
   assert.deepEqual(checkRunReport({ mode: 'gate', status: 'invented' }), {
     conclusion: 'neutral',
