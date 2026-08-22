@@ -26,6 +26,7 @@ test('exposes one product-level Action contract', () => {
     'lenses',
     'mode',
     'pr-number',
+    'approver-logins',
     'allowed-associations',
     'cli-version',
     'cli-channel',
@@ -46,6 +47,7 @@ test('decides a review request before anything visible happens', () => {
   assert.equal(gated.length, steps.length - 1);
   // Advertised as supported configuration, so it belongs in the Inputs table.
   assert.match(contract, /^\| `allowed-associations` \| no \|/m);
+  assert.match(contract, /^\| `approver-logins` \| no \|/m);
   assert.match(contract, /## Who decides what/);
   // The author exemption must not reach an ordinary issue's opener: they are the
   // author of an issue, not of a pull request, and would otherwise bypass the
@@ -57,6 +59,28 @@ test('decides a review request before anything visible happens', () => {
   assert.match(
     decide,
     /github\.event\.issue\.pull_request && github\.event\.issue\.user\.login/,
+  );
+});
+
+test('rejects an approver list that was never split', () => {
+  const step = action.slice(
+    action.indexOf('name: Validate Action inputs'),
+    action.indexOf('name: Resolve pull request'),
+  );
+  // A login holds no whitespace, so one that does is a list written with the
+  // wrong separator — which would otherwise reach the CLI as a single login
+  // matching nobody, and read as the reviewer ignoring the input.
+  assert.match(step, /APPROVER_LOGINS: \$\{\{ inputs\['approver-logins'\] \}\}/);
+  assert.match(step, /approver-logins entries must be single logins/);
+  // The same input has to reach the step that builds the CLI arguments, or the
+  // list validates and then names nobody.
+  const review = action.slice(
+    action.indexOf('name: Run Tessl Code Review'),
+    action.indexOf('name: Build public result'),
+  );
+  assert.match(
+    review,
+    /APPROVER_LOGINS: \$\{\{ inputs\['approver-logins'\] \}\}/,
   );
 });
 

@@ -12,6 +12,7 @@ The supported entry point is `action.yml`.
 | `effort` | no | Reasoning effort for every review lens: `low`, `medium` or `high`. Overrides any effort the profile sets, including a per-lens one. Empty sends none, leaving the installed CLI to resolve it from the profile and the model's own default. A value outside the three is rejected before the review starts. |
 | `mode` | no | `advisory` or `gate`. Defaults to `advisory`. |
 | `pr-number` | no | Open pull-request number for an event without pull-request context. |
+| `approver-logins` | no | Comma-separated comment-author logins whose comments may request an approval, for example `kikimora-dev[bot]`. Empty permits none. Governs approval requests only — see below. |
 | `allowed-associations` | no | Comma-separated GitHub author associations whose comments may request a review, for example `OWNER,MEMBER,COLLABORATOR`. Empty accepts any author. Applies to comment events only; a comment from any other association is not a request and nothing runs. The pull request's own author is never refused, whatever the list says — see below. |
 | `cli-version` | no | Tessl CLI version to install. Defaults to `latest`, which tracks the current release; set an exact version to fix the CLI alongside the Action's own commit SHA. The selected release must publish a review and report the revision it reviewed; one that does not concludes `incompatible-cli`. |
 
@@ -41,6 +42,23 @@ own pull request.
 Read `allowed-associations` as "who else may ask", and treat the association as a
 coarse signal rather than an authorization boundary: it is what the event payload
 says, not a permission lookup.
+
+`approver-logins` answers a different question. A comment can ask the reviewer to
+approve the pull request outright rather than review it, and the CLI grants that
+to the repository's own members by association. A GitHub App has no such
+association — it comments as `NONE` whatever its permissions — so naming its login
+here is the only way one can ask. A login is matched case-insensitively, and
+exactly as the event payload spells it, which for an App includes the `[bot]`
+suffix.
+
+Being named grants nothing on its own: the comment still has to ask for an
+approval, and one that asks for a review gets a review. A request from an author
+who is not named is refused, and the review published in its place says so, so a
+missing entry reads as a refusal rather than as a broken reviewer.
+
+Whether an approval reaches GitHub at all is `mode`. Under `advisory` the review
+is published as a comment whatever it concluded, so an approval granted here
+changes nothing on the pull request; `gate` is what publishes the verdict.
 
 An event the Action does not admit ends the run immediately. Nothing is published,
 no check run is created, no reaction is posted, and `status` is `not-requested`.

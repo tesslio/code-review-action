@@ -42,6 +42,16 @@ inputs:
     description: Pull-request number for events without pull-request context
     required: false
     default: ''
+  approver-logins:
+    description: >-
+      Comma-separated comment-author logins whose comments may request an
+      approval, for example kikimora-dev[bot]. Empty permits none. This is the
+      only way a GitHub App can request one: an App comments with author
+      association NONE whatever its permissions, so no association names it.
+      Governs approval requests only; allowed-associations governs review
+      requests.
+    required: false
+    default: ''
   allowed-associations:
     description: >-
       Comma-separated GitHub author associations whose comments may request a
@@ -130,6 +140,7 @@ runs:
         LENSES: ${{ inputs.lenses }}
         MODE: ${{ inputs.mode }}
         EFFORT: ${{ inputs.effort }}
+        APPROVER_LOGINS: ${{ inputs['approver-logins'] }}
         PR_NUMBER_INPUT: ${{ inputs['pr-number'] }}
       run: |
         set -euo pipefail
@@ -144,6 +155,16 @@ runs:
         if [[ -n "$LENSES" ]]; then
           jq -e 'type == "array" and all(.[]; type == "string" and length > 0)' <<< "$LENSES" >/dev/null || { echo "::error::lenses must be a JSON array of non-empty strings."; exit 1; }
         fi
+        # Surrounding whitespace is formatting and is trimmed; whitespace left
+        # inside an entry is a separator the author expected to split on and
+        # this list did not, which would otherwise reach the CLI as one login
+        # matching nobody.
+        while IFS= read -r approver_login; do
+          approver_login="${approver_login#"${approver_login%%[![:space:]]*}"}"
+          approver_login="${approver_login%"${approver_login##*[![:space:]]}"}"
+          [[ -n "$approver_login" ]] || continue
+          [[ "$approver_login" != *[[:space:]]* ]] || { echo "::error::approver-logins entries must be single logins separated by commas, got '$approver_login'."; exit 1; }
+        done < <(tr ',' '\n' <<< "$APPROVER_LOGINS")
 
     - name: Resolve pull request
       id: pr
@@ -235,6 +256,7 @@ runs:
         EFFORT: ${{ inputs.effort }}
         LENSES: ${{ inputs.lenses }}
         MODE: ${{ inputs.mode }}
+        APPROVER_LOGINS: ${{ inputs['approver-logins'] }}
         HEAD_SHA: ${{ steps.pr.outputs['head-sha'] }}
       run: bash "$GITHUB_ACTION_PATH/src/run-review.sh"
 
