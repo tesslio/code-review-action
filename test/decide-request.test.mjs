@@ -179,3 +179,46 @@ test('the author exemption ignores login casing', async () => {
 
   assert.match(outputs, /requested=true/);
 });
+
+test('a named approver is admitted past an association allowlist', async () => {
+  // A GitHub App comments as NONE whatever its permissions, so an allowlist of
+  // human associations refuses the very App the caller named as an approver —
+  // and refuses it as "no review requested", so it gets neither the approval it
+  // asked for nor the refusal saying why not.
+  const { outputs } = await decide({
+    COMMENT_BODY: '@tessl-code-review approve',
+    COMMENT_ASSOCIATION: 'NONE',
+    COMMENT_AUTHOR: 'kikimora-dev[bot]',
+    ALLOWED_ASSOCIATIONS: 'OWNER,MEMBER,COLLABORATOR',
+    APPROVER_LOGINS: 'kikimora-dev[bot]',
+  });
+  assert.match(outputs, /requested=true/);
+});
+
+test('an approver list read either way admits the same logins', async () => {
+  for (const APPROVER_LOGINS of [
+    'other[bot],kikimora-dev[bot]',
+    'other[bot]\nkikimora-dev[bot]',
+    ' Kikimora-Dev[Bot] , other[bot] ',
+  ]) {
+    const { outputs } = await decide({
+      COMMENT_BODY: '@tessl-code-review approve',
+      COMMENT_ASSOCIATION: 'NONE',
+      COMMENT_AUTHOR: 'kikimora-dev[bot]',
+      ALLOWED_ASSOCIATIONS: 'OWNER',
+      APPROVER_LOGINS,
+    });
+    assert.match(outputs, /requested=true/, APPROVER_LOGINS);
+  }
+});
+
+test('an approver list admits nobody it does not name', async () => {
+  const { outputs } = await decide({
+    COMMENT_BODY: '@tessl-code-review approve',
+    COMMENT_ASSOCIATION: 'NONE',
+    COMMENT_AUTHOR: 'other-app[bot]',
+    ALLOWED_ASSOCIATIONS: 'OWNER,MEMBER,COLLABORATOR',
+    APPROVER_LOGINS: 'kikimora-dev[bot]',
+  });
+  assert.match(outputs, /requested=false/);
+});

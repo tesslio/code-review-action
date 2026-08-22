@@ -127,12 +127,20 @@ test('checks out the reviewed head without persisted credentials', () => {
 test('the caller chooses the CLI version, and a mismatch is detected', () => {
   // The CLI is no longer pinned by this Action, so improvements reach callers
   // without an Action release. What replaces the pin is detection: an installed
-  // CLI that cannot publish has to fail by name, before the review runs, rather
-  // than deep in argument parsing.
+  // CLI missing a flag this run sends has to fail by name, before the review
+  // runs, rather than deep in argument parsing.
   assert.match(action, /version: \$\{\{ inputs\['cli-version'\] \}\}/);
-  const preflight = action.indexOf('Check the installed CLI can publish');
+  const preflight = action.indexOf('Check the installed CLI supports this run');
   assert.ok(preflight > action.indexOf('tesslio/setup-tessl'));
   assert.ok(preflight < action.indexOf('src/run-review.sh'));
+
+  // Every flag whose absence would fail in argument parsing, and only when the
+  // run will actually send it: a CLI that publishes but predates --approver
+  // would otherwise pass a --publish-only check and then die parsing arguments.
+  const step = action.slice(preflight, action.indexOf('src/run-review.sh'));
+  assert.match(step, /grep -q -- '--publish'/);
+  assert.match(step, /grep -q -- '--approver'/);
+  assert.match(step, /if \[\[ -n "\$APPROVER_LOGINS" \]\]/);
 });
 
 test('reports a check run on the reviewed head and concludes it at finalize', () => {

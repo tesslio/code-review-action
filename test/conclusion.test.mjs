@@ -245,7 +245,6 @@ test('only a completed review clears a stale failure notice', () => {
     'changes-requested',
     'gate-configuration-failure',
     'skipped-no-matching-lenses',
-    'refused-approval-request',
   ]) {
     assert.ok(COMPLETED_REVIEW_STATUSES.has(status), status);
   }
@@ -255,6 +254,9 @@ test('only a completed review clears a stale failure notice', () => {
     'superseded',
     'gate-verdict-failure',
     'incompatible-cli',
+    // Finished cleanly, but answers a comment rather than the commit, so it
+    // cannot retract a standing report that a review did not complete.
+    'refused-approval-request',
   ]) {
     assert.ok(!COMPLETED_REVIEW_STATUSES.has(status), status);
   }

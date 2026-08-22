@@ -13,6 +13,14 @@ import {
  * turned out to name a different commit. Naming the completed states directly is
  * what lets one condition cover all three, and they cannot drift from the
  * statuses above because they are the same values.
+ *
+ * `refused-approval-request` is deliberately absent even though its run
+ * finished cleanly. This set clears the notice left by an earlier review that
+ * did not complete, and a refusal establishes nothing about the commit that
+ * notice describes: it answers a comment. Clearing on it would retract a
+ * standing report of breakage that nothing has fixed. `skipped-no-matching-
+ * lenses` stays, because that run did evaluate the change and found no lens
+ * that applies to it.
  */
 export const COMPLETED_REVIEW_STATUSES = new Set([
   'approved',
@@ -20,7 +28,6 @@ export const COMPLETED_REVIEW_STATUSES = new Set([
   'changes-requested',
   'gate-configuration-failure',
   'skipped-no-matching-lenses',
-  'refused-approval-request',
 ]);
 
 /**
