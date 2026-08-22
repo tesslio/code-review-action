@@ -78,13 +78,13 @@ jobs:
             echo "mention=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Pinned to a full commit SHA, resolved from the current supported Tessl
-      # Code Review release when this workflow was written, and changed only as
-      # a reviewed update. The Action checks out the pull-request head itself,
-      # so this job needs no checkout step. Runs for a pull_request or dispatch
-      # event, or for an issue_comment the mention-gate step confirmed.
+      # References the moving major tag, the same reference the README
+      # recommends to every caller, so this repository runs what it ships.
+      # The Action checks out the pull-request head itself, so this job needs
+      # no checkout step. Runs for a pull_request or dispatch event, or for an
+      # issue_comment the mention-gate step confirmed.
       - if: github.event_name != 'issue_comment' || steps.gate.outputs.mention == 'true'
-        uses: tesslio/code-review-action@c6c5070082b1a578993552756e22fe0fef58015b # v1.1.0
+        uses: tesslio/code-review-action@v1
         with:
           tessl-token: ${{ secrets.TESSL_TOKEN }}
           # Named review profile. The standard profile is the supported default.
