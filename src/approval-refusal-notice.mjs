@@ -22,16 +22,26 @@ export function approvalRefusalMarker(commentId) {
 }
 
 /**
- * The notice body. It says what was refused, who may ask, and — the part a
- * reader cannot work out from being told no — that a review is still available
- * for the asking.
+ * The notice body: what happened, the rule that decided it, and the way to get
+ * a review instead.
+ *
+ * It leads with the refusal because that is what the reader asked about, and
+ * carries the absent review in the same line because that is the next thing
+ * they would wonder. The rule is stated rather than the reader's standing under
+ * it: both carry the same fact, and one of them reads as a verdict on the
+ * person who asked.
+ *
+ * "Refused" is the word the terminal status uses, so this comment, the check
+ * run and the `status` output name the outcome the same way. Whether it also
+ * reaches the workflow log is the caller's: nothing here prints it on the
+ * ordinary path, and a caller that wants it there echoes the output itself.
  */
 export function approvalRefusalBody(commentId) {
   return [
     approvalRefusalMarker(commentId),
-    'Tessl Code Review was asked to approve this pull request, and the author of that comment is not permitted to approve. No review was run, because approving is not a review: running one would answer a question nobody asked.',
+    'Approval request refused, and no review was run.',
     '',
-    'Comment `@tessl-code-review` to have the change reviewed. Approving from a comment is limited to the repository members GitHub already knows, and to the comment authors the workflow names in `approver-logins`.',
+    'Approving is limited to owners, members, and collaborators, plus any login the workflow names in `approver-logins`. Comment `@tessl-code-review` if you would like the change reviewed.',
   ].join('\n');
 }
 
