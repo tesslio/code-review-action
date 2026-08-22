@@ -128,6 +128,12 @@ test('a refused approval request is neutral and never reports approval', () => {
     assert.match(report.title, /Approval request refused/);
     assert.match(report.summary, /No review was run/);
     assert.doesNotMatch(report.summary, /approved/);
+    // The half a reader acts on. Asserting only the opening would let the
+    // eligibility rule and the way out be deleted without a test noticing,
+    // leaving a refusal that says no and nothing else.
+    assert.match(report.summary, /owners, members, and collaborators/);
+    assert.match(report.summary, /approver-logins/);
+    assert.match(report.summary, /@tessl-code-review/);
   }
 });
 

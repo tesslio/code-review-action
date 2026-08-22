@@ -31,9 +31,10 @@ export function approvalRefusalMarker(commentId) {
  * it: both carry the same fact, and one of them reads as a verdict on the
  * person who asked.
  *
- * "Refused" is the word the terminal status uses, so a reader moving between
- * this comment, the check run and the workflow log meets one term rather than
- * three.
+ * "Refused" is the word the terminal status uses, so this comment, the check
+ * run and the `status` output name the outcome the same way. Whether it also
+ * reaches the workflow log is the caller's: nothing here prints it on the
+ * ordinary path, and a caller that wants it there echoes the output itself.
  */
 export function approvalRefusalBody(commentId) {
   return [
