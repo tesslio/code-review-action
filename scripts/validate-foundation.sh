@@ -28,7 +28,13 @@ if [[ ! -s action.yml ]]; then
   exit 1
 fi
 
-if grep -rnE 'uses:[[:space:]]+[^./][^@[:space:]]+@(main|master|latest|v[0-9]+([.][0-9]+)*)' .github/workflows action.yml; then
+# A reference to this repository's own Action is not third-party code, so the
+# rule skips it: the workflow that reviews this repository takes the moving
+# major tag the README recommends to every caller. The exemption accepts the
+# forms YAML allows around that reference — either quote style, and a trailing
+# comment — so a rewrapped line does not read as an unpinned dependency.
+if grep -rnE 'uses:[[:space:]]+[^./][^@[:space:]]+@(main|master|latest|v[0-9]+([.][0-9]+)*)' .github/workflows action.yml \
+  | grep -vE "uses:[[:space:]]+['\"]?tesslio/code-review-action@v[0-9]+['\"]?([[:space:]]+#.*)?[[:space:]]*$"; then
   echo "third-party Actions must be pinned by full commit SHA" >&2
   exit 1
 fi
