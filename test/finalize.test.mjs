@@ -172,7 +172,7 @@ test('a refused approval request answers the comment that asked', async () => {
   // pull request: without it the commenter sees a neutral check and no reason.
   assert.match(requests, /issues\/42\/comments/);
   assert.match(requests, /tessl-code-review:approval-refused:v1 id=55/);
-  assert.match(requests, /not permitted to approve/);
+  assert.match(requests, /Approval request refused, and no review was run/);
 });
 
 test('a refused approval request with no comment id still concludes', async () => {

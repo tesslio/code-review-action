@@ -84,7 +84,7 @@ const REPORTS = {
     advisory: 'neutral',
     title: 'Approval request refused',
     summary:
-      'Tessl Code Review was asked to approve this pull request by an author who is not permitted to approve, so it made no review of this commit. Comment @tessl-code-review to have the change reviewed.',
+      'No review was run in its place. Approving is limited to owners, members, and collaborators, plus any login the workflow names in approver-logins. Comment @tessl-code-review to have the change reviewed.',
   },
   'skipped-no-matching-lenses': {
     gate: 'neutral',

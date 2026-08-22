@@ -126,7 +126,7 @@ test('a refused approval request is neutral and never reports approval', () => {
     // pull request is the honest position rather than a passing check.
     assert.equal(report.conclusion, 'neutral');
     assert.match(report.title, /Approval request refused/);
-    assert.match(report.summary, /made no review/);
+    assert.match(report.summary, /No review was run/);
     assert.doesNotMatch(report.summary, /approved/);
   }
 });
