@@ -290,9 +290,10 @@ that broke reports neutral, and the breakage reaches you as a failed job and a
 pull-request comment.
 
 The job status answers the other question, in both modes: whether the Action
-ran. A review that completed never fails the job, whatever verdict it reached.
-A failing job means no review was published for the head that was checked,
-which is either breakage or the superseded case below.
+ran. A review that completed and was published as asked never fails the job,
+whatever verdict it reached. The job fails when the run could not deliver that:
+it broke, its head was superseded before publication, or repository settings
+forced a complete review into a comment.
 
 ### Superseded runs
 

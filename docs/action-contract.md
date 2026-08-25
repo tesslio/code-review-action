@@ -318,8 +318,10 @@ with the terminal status:
 
 The job conclusion reports whether the Action ran, not what the review decided,
 and it does not vary by mode. A gate that requests changes ran correctly, so its
-job succeeds and the verdict reaches the pull request on the check run. A failing
-job means no review was produced for the head under check.
+job succeeds and the verdict reaches the pull request on the check run. The job
+fails when the run could not deliver a review the way it was asked to: it broke,
+its head was superseded before publication, or repository settings forced a
+complete review into a comment.
 
 Advisory mode never concludes failure, so requiring the check cannot turn
 advisory mode into a gate. Breakage still reaches maintainers as a failed job
