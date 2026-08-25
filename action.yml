@@ -10,6 +10,18 @@ inputs:
   tessl-token:
     description: Tessl API token used by the CLI
     required: true
+  github-token:
+    description: >-
+      Token whose identity authors the published review. Defaults to the
+      workflow's own token, which publishes as github-actions[bot]. Supply a
+      GitHub App installation token or a machine-user token to publish under
+      that identity instead; it needs pull-requests write and contents read on
+      this repository. The Action's own plumbing — the comment reaction, the
+      check run and the failure notice — keeps using the workflow token
+      whatever this is set to, so a supplied identity needs no permission
+      beyond reviewing.
+    required: false
+    default: ${{ github.token }}
   profile:
     description: Named Code Review profile or repository YAML profile path
     required: false
@@ -170,6 +182,18 @@ runs:
           [[ "$approver_login" != *[[:space:]]* ]] || { echo "::error::approver-logins entries must be single logins separated by commas or newlines, got '$approver_login'."; exit 1; }
         done < <(tr ',' '\n' <<< "$APPROVER_LOGINS")
 
+    # Before the check run, the checkout and the CLI install, because a token
+    # that cannot review fails at the last of those steps otherwise — after a
+    # check run is already visible and several minutes have been spent, with a
+    # message about publishing rather than about the credential.
+    - name: Verify the reviewing identity
+      if: steps.request.outputs.requested == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs['github-token'] }}
+        REPOSITORY: ${{ github.repository }}
+      run: node "$GITHUB_ACTION_PATH/src/verify-review-identity.mjs"
+
     - name: Resolve pull request
       id: pr
       if: steps.request.outputs.requested == 'true'
@@ -244,6 +268,7 @@ runs:
       shell: bash
       env:
         APPROVER_LOGINS: ${{ inputs['approver-logins'] }}
+        INFERRED_APPROVER: ${{ steps.pr.outputs['inferred-approver'] }}
       run: |
         set -euo pipefail
         cli_help="$(tessl code review --help 2>&1 || true)"
@@ -252,8 +277,11 @@ runs:
           exit 1
         }
         grep -q -- '--publish' <<< "$cli_help" || unsupported "publishing a review (--publish)"
-        if [[ -n "$APPROVER_LOGINS" ]]; then
-          grep -q -- '--approver' <<< "$cli_help" || unsupported "the approver-logins input (--approver)"
+        # An inferred approver sends `--approver` for a caller that named none,
+        # so the flag has to be checked on that too or inference turns a working
+        # run against an older CLI into a failure deep in argument parsing.
+        if [[ -n "$APPROVER_LOGINS" || -n "$INFERRED_APPROVER" ]]; then
+          grep -q -- '--approver' <<< "$cli_help" || unsupported "requesting an approval (--approver)"
         fi
 
     - name: Run Tessl Code Review
@@ -262,7 +290,9 @@ runs:
       shell: bash
       working-directory: ${{ github.workspace }}/.tessl-code-review/workspace
       env:
-        GH_TOKEN: ${{ github.token }}
+        # The one step whose token decides who authors the review, which is why
+        # it is the only one taking the input rather than the workflow token.
+        GH_TOKEN: ${{ inputs['github-token'] }}
         PR_NUMBER: ${{ steps.pr.outputs.number }}
         PROFILE: ${{ inputs.profile }}
         MODEL: ${{ inputs.model }}
@@ -270,6 +300,7 @@ runs:
         LENSES: ${{ inputs.lenses }}
         MODE: ${{ inputs.mode }}
         APPROVER_LOGINS: ${{ inputs['approver-logins'] }}
+        INFERRED_APPROVER: ${{ steps.pr.outputs['inferred-approver'] }}
         HEAD_SHA: ${{ steps.pr.outputs['head-sha'] }}
       run: bash "$GITHUB_ACTION_PATH/src/run-review.sh"
 

@@ -20,6 +20,7 @@ test('exposes one product-level Action contract', () => {
   );
   assert.deepEqual(names, [
     'tessl-token',
+    'github-token',
     'profile',
     'model',
     'effort',
@@ -140,7 +141,13 @@ test('the caller chooses the CLI version, and a mismatch is detected', () => {
   const step = action.slice(preflight, action.indexOf('src/run-review.sh'));
   assert.match(step, /grep -q -- '--publish'/);
   assert.match(step, /grep -q -- '--approver'/);
-  assert.match(step, /if \[\[ -n "\$APPROVER_LOGINS" \]\]/);
+  // An inferred approver sends the flag for a caller that named none, so the
+  // guard covers it too; checking only the input would leave inference failing
+  // in argument parsing against exactly the older CLI this detection is for.
+  assert.match(
+    step,
+    /if \[\[ -n "\$APPROVER_LOGINS" \|\| -n "\$INFERRED_APPROVER" \]\]/,
+  );
 });
 
 test('reports a check run on the reviewed head and concludes it at finalize', () => {
@@ -264,7 +271,7 @@ test('shows a copyable workflow for each supported trigger', () => {
   const references = [
     ...readme.matchAll(/uses: tesslio\/code-review-action@(\S+)/g),
   ];
-  assert.equal(references.length, 5);
+  assert.equal(references.length, 6);
   // Every example shows the moving major tag, which is the recommended
   // reference; pinning a SHA is documented in prose as the alternative.
   for (const reference of references) {

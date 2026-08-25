@@ -85,6 +85,33 @@ references so the review does not change when a plugin publishes a new
 version. The selected profile owns review implementation details, which are
 not supported customer workflow configuration.
 
+### Who the review is posted by
+
+Reviews are published as `github-actions[bot]` by default. To publish under
+another identity, mint a token for it and pass it as `github-token`:
+
+```yaml
+- uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+  id: reviewer
+  with:
+    app-id: ${{ vars.REVIEWER_APP_ID }}
+    private-key: ${{ secrets.REVIEWER_APP_PRIVATE_KEY }}
+
+- uses: tesslio/code-review-action@v1
+  with:
+    tessl-token: ${{ secrets.TESSL_TOKEN }}
+    github-token: ${{ steps.reviewer.outputs.token }}
+```
+
+The identity needs pull-requests write and contents read on the repository. It
+authors the review and nothing else: the comment reaction, the check run and
+the failure notice stay on the workflow's own token, so it needs no permission
+beyond reviewing. A machine-user token works the same way.
+
+An App that authors pull requests in the same repository should also be named
+in `approver-logins` if its comments are to request approvals, since an App
+comments with author association `NONE` whatever its permissions.
+
 See [Action contract](docs/action-contract.md) for supported customer
 configuration and outputs.
 

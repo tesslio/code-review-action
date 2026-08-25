@@ -24,7 +24,14 @@
 ### Credentials
 
 - Require callers to grant minimal GitHub permissions.
-- Use the automatic `github.token` for GitHub publication.
+- Use the automatic `github.token` for everything the Action itself does: the
+  comment reaction, pull-request resolution, the check run, the failure notice
+  and the conclusion.
+- Publish the review with the `github-token` input, which defaults to that same
+  automatic token. A caller supplying another identity therefore grants it what
+  reviewing needs and nothing the Action's own plumbing needs, and a supplied
+  token is verified against the repository before the review starts rather than
+  failing at publication.
 - Accept the Tessl credential only through the declared Action input.
 - Never place credentials in command arguments, logs, outputs, or artifacts.
 

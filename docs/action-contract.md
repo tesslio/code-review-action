@@ -7,6 +7,7 @@ The supported entry point is `action.yml`.
 | Input | Required | Behavior |
 | --- | --- | --- |
 | `tessl-token` | yes | Authenticates the Tessl CLI. |
+| `github-token` | no | Token whose identity authors the published review. Defaults to the workflow's own token, which publishes as `github-actions[bot]`. A GitHub App installation token or a machine-user token publishes under that identity instead, and needs pull-requests write and contents read on this repository. Verified before the review starts. The Action's own plumbing keeps the workflow token whatever this is set to. |
 | `profile` | no | Named review profile or repository `.yml` or `.yaml` profile path. Defaults to `standard`; file profiles are not discovered automatically. |
 | `lenses` | no | JSON array containing the complete ordered lens selection, at most 8 entries. Empty uses profile defaults. |
 | `effort` | no | Reasoning effort for every review lens: `low`, `medium` or `high`. Overrides any effort the profile sets, including a per-lens one. Empty sends none, leaving the installed CLI to resolve it from the profile and the model's own default. A value outside the three is rejected before the review starts. |
@@ -66,6 +67,22 @@ gates.
 
 Being named grants nothing on its own: the comment still has to ask for an
 approval, and one that asks for a review gets a review.
+
+One login is added to the list without being named: the pull request's own
+author, when that author is a GitHub App. An agent that opens a pull request,
+pushes fixes and then asks for approval is already admitted, because a pull
+request's author is never refused — and was then silently downgraded to a
+review, because its login never reached the approver list. A caller that forgot
+the input saw a reviewer that reviews and never approves, with nothing saying
+why.
+
+The inference stops at an App deliberately. Extending it to every author would
+let a person request approval on their own pull request, which is the loop a
+required review exists to prevent.
+
+It adds to the list and never replaces it. An approval may be requested by a bot
+other than the one that opened the pull request, and naming those stays the
+caller's to do. A login named by the caller and inferred as well is sent once.
 
 A request from an author who is not named is refused, and **no review is run**.
 Approving is not a review, so reviewing instead would answer a question nobody
