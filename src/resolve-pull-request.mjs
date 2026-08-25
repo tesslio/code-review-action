@@ -40,6 +40,28 @@ if (!/^[0-9a-f]{40}$/i.test(headSha ?? '')) {
   throw new Error('GitHub returned an invalid pull-request head SHA.');
 }
 
+/**
+ * The pull request's own author, when that author is a GitHub App, added to
+ * whatever logins the caller named as permitted to request an approval.
+ *
+ * An agent that opens a pull request, pushes fixes and then asks for approval
+ * is otherwise admitted — the request gate already exempts a pull request's
+ * author — and then silently downgraded to a review, because the login never
+ * reached the approver list. A caller that forgets the input sees a reviewer
+ * that reviews and never approves, with nothing saying why.
+ *
+ * Restricted to an App because widening it to every author would let a person
+ * ask for approval on their own pull request, which is the loop a required
+ * review exists to prevent. This adds to the caller's list and never replaces
+ * it: an approval may well be requested by a bot other than the one that opened
+ * the pull request, and naming those stays the caller's to do.
+ */
+const author = pullRequest.user;
+const inferredApprover =
+  author?.type === 'Bot' && typeof author.login === 'string'
+    ? author.login
+    : '';
+
 const output = requiredEnv('GITHUB_OUTPUT');
 await appendFile(
   output,
@@ -47,6 +69,7 @@ await appendFile(
     `number=${number}`,
     `head-sha=${headSha}`,
     `head-repository=${headRepository}`,
+    `inferred-approver=${inferredApprover}`,
     '',
   ].join('\n'),
   'utf8',

@@ -15,6 +15,7 @@ async function capturedArguments({
   lenses = '',
   mode = 'advisory',
   approverLogins = '',
+  inferredApprover = '',
 }) {
   const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
   const executable = join(directory, 'tessl');
@@ -42,6 +43,7 @@ async function capturedArguments({
         EFFORT: effort,
         LENSES: lenses,
         APPROVER_LOGINS: approverLogins,
+        INFERRED_APPROVER: inferredApprover,
       },
     });
     return (await readFile(capture, 'utf8')).trim().split('\n');
@@ -112,6 +114,42 @@ test('reads a formatted approver list the same as a bare one', async () => {
 
 test('names no approver when the input is empty', async () => {
   assert.ok(!(await capturedArguments({})).includes('--approver'));
+});
+
+test('names the inferred approver when the caller named none', async () => {
+  const args = await capturedArguments({ inferredApprover: 'kikimora-dev[bot]' });
+  assert.deepEqual(args.slice(args.indexOf('--approver'), -3), [
+    '--approver',
+    'kikimora-dev[bot]',
+  ]);
+});
+
+test('adds the inferred approver to the caller list rather than replacing it', async () => {
+  // A bot other than the one that opened the pull request may be the one that
+  // asks for approval, so the caller's list has to survive inference intact.
+  const args = await capturedArguments({
+    approverLogins: 'tessl-helper[bot]',
+    inferredApprover: 'kikimora-dev[bot]',
+  });
+  assert.deepEqual(args.slice(args.indexOf('--approver'), -3), [
+    '--approver',
+    'tessl-helper[bot]',
+    '--approver',
+    'kikimora-dev[bot]',
+  ]);
+});
+
+test('names an approver once when inference repeats a login the caller named', async () => {
+  // GitHub logins are case-insensitive, so the same account spelled two ways is
+  // one approver and must not be sent twice.
+  const args = await capturedArguments({
+    approverLogins: 'Kikimora-Dev[bot]',
+    inferredApprover: 'kikimora-dev[bot]',
+  });
+  assert.deepEqual(args.slice(args.indexOf('--approver'), -3), [
+    '--approver',
+    'Kikimora-Dev[bot]',
+  ]);
 });
 
 test('exports a review id only for a receipt naming a published review', async () => {
