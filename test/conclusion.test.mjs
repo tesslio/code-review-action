@@ -39,12 +39,12 @@ test('advisory findings remain successful', () => {
   );
 });
 
-test('an unapproved gate fails after requesting changes', () => {
+test('an unapproved gate requests changes without failing the job', () => {
   assert.deepEqual(
     reviewConclusion(
       valid({ mode: 'gate', outcome: { approved: false } }),
     ),
-    { status: 'changes-requested', exitCode: 1 },
+    { status: 'changes-requested', exitCode: 0 },
   );
 });
 

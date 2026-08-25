@@ -8,11 +8,11 @@ import {
  * The terminal statuses that mean a review completed for the head under check.
  *
  * Completion is not approval and it is not a receipt. A gate publishing
- * requested changes concludes non-zero and completed; a run whose CLI wrote a
- * published receipt and then failed did not; and neither did one whose verdict
- * turned out to name a different commit. Naming the completed states directly is
- * what lets one condition cover all three, and they cannot drift from the
- * statuses above because they are the same values.
+ * requested changes concludes the check a failure and completed; a run whose
+ * CLI wrote a published receipt and then failed did not; and neither did one
+ * whose verdict turned out to name a different commit. Naming the completed
+ * states directly is what lets one condition cover all three, and they cannot
+ * drift from the statuses above because they are the same values.
  *
  * `refused-approval-request` is deliberately absent even though its run
  * finished cleanly. This set clears the notice left by an earlier review that
@@ -105,8 +105,12 @@ export function reviewConclusion({ mode, reviewExitCode, result, headSha }) {
   if (publication.status === 'published-with-policy-fallback') {
     return { status: 'gate-configuration-failure', exitCode: 1 };
   }
+  // A gate that requests changes ran correctly and published a complete review,
+  // and the check run carries that verdict, so the job succeeds. Exiting
+  // non-zero would leave a caller unable to tell this outcome from a run that
+  // produced no review at all.
   if (mode === 'gate' && approved === false) {
-    return { status: 'changes-requested', exitCode: 1 };
+    return { status: 'changes-requested', exitCode: 0 };
   }
   return {
     status: approved === true ? 'approved' : 'advisory-findings',

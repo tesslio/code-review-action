@@ -273,10 +273,11 @@ in both modes, and succeeds the job. This is not an approval or pass verdict;
 in gate mode, the required check does not block the pull request from merging.
 
 In gate mode, an approved result attempts `APPROVE`. A result that requires
-changes attempts `REQUEST_CHANGES` and then fails the check. If repository
-settings do not allow the requested review event, the CLI publishes the
-completed review as a comment, and the Action explains the configuration problem
-and fails the gate.
+changes attempts `REQUEST_CHANGES` and then fails the check while succeeding the
+job: the run did what it was asked, and its verdict is reported on the check run
+that branch protection requires. If repository settings do not allow the
+requested review event, the CLI publishes the completed review as a comment, and
+the Action explains the configuration problem and fails the gate.
 
 Gate mode fails closed. Only a boolean `approved` decides the gate: an outcome
 that omits the verdict, or carries a non-boolean in its place, is reported as
@@ -301,19 +302,26 @@ with the terminal status:
 
 `approved` is the terminal success status, matching the outcome decision.
 
-| Terminal status | Gate conclusion | Advisory conclusion |
-| --- | --- | --- |
-| `approved` | success | success |
-| `advisory-findings` | not reachable, neutral | neutral |
-| `changes-requested` | failure | not reachable, neutral |
-| `technical-failure` | failure | neutral |
-| `publication-failure` | failure | neutral |
-| `gate-configuration-failure` | failure | not reachable, neutral |
-| `gate-verdict-failure` | failure | not reachable, neutral |
-| `incompatible-cli` | failure | neutral |
-| `superseded` | neutral | neutral |
-| `skipped-no-matching-lenses` | neutral | neutral |
-| `refused-approval-request` | neutral | neutral |
+| Terminal status | Gate conclusion | Advisory conclusion | Job |
+| --- | --- | --- | --- |
+| `approved` | success | success | success |
+| `advisory-findings` | not reachable, neutral | neutral | success |
+| `changes-requested` | failure | not reachable, neutral | success |
+| `technical-failure` | failure | neutral | failure |
+| `publication-failure` | failure | neutral | failure |
+| `gate-configuration-failure` | failure | not reachable, neutral | failure |
+| `gate-verdict-failure` | failure | not reachable, neutral | failure |
+| `incompatible-cli` | failure | neutral | failure |
+| `superseded` | neutral | neutral | failure |
+| `skipped-no-matching-lenses` | neutral | neutral | success |
+| `refused-approval-request` | neutral | neutral | success |
+
+The job conclusion reports whether the Action ran, not what the review decided,
+and it does not vary by mode. A gate that requests changes ran correctly, so its
+job succeeds and the verdict reaches the pull request on the check run. The job
+fails when the run could not deliver a review the way it was asked to: it broke,
+its head was superseded before publication, or repository settings forced a
+complete review into a comment.
 
 Advisory mode never concludes failure, so requiring the check cannot turn
 advisory mode into a gate. Breakage still reaches maintainers as a failed job
