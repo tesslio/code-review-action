@@ -159,6 +159,14 @@ test('reports a check run on the reviewed head and concludes it at finalize', ()
     action,
     /CHECK_RUN_ID: \$\{\{ steps\.check\.outputs\['check-run-id'\] \}\}/,
   );
+  // Concluding runs for a failed review, so it cannot be gated on success — but
+  // it has nothing to conclude before the check run exists, and a step failing
+  // ahead of that would otherwise finalize against empty outputs.
+  const finalize = action.slice(
+    action.indexOf('- name: Apply review conclusion'),
+    action.indexOf('src/finalize.mjs'),
+  );
+  assert.match(finalize, /steps\.check\.outputs\['check-run-id'\] != ''/);
 });
 
 test('runs trusted support from the pinned Action path', () => {
@@ -191,10 +199,13 @@ test('documents approval as the public success status', () => {
 test('publishes a failure notice only when the review itself failed', () => {
   // The CLI reviews and publishes in one invocation, so its exit code is the
   // only signal here; a no-match result exits zero and leaves no notice, and a
-  // run that was never a review request leaves none either.
+  // run that was never a review request leaves none either. A resolved pull
+  // request is required as well, because an unset exit code is also not '0':
+  // without it a step failing before resolution posts a notice with no number
+  // to post it on, adding a crash to the failure it was reporting.
   assert.match(
     action,
-    /if: always\(\) && steps\.request\.outputs\.requested == 'true' && steps\.review\.outputs\['exit-code'\] != '0'/,
+    /always\(\) && steps\.request\.outputs\.requested == 'true' &&\s*steps\.pr\.outputs\.number != '' && steps\.review\.outputs\['exit-code'\] != '0'/,
   );
   assert.match(contract, /`skipped-no-matching-lenses`/);
   assert.match(contract, /`no-matching-lenses`/);

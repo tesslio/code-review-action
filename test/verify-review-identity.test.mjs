@@ -38,7 +38,7 @@ async function verify({ status = '200', body = '{}' } = {}) {
   }
 }
 
-test('admits a token with write access, asking once', async () => {
+test('admits a token that can reach the repository, asking once', async () => {
   const { exitCode, requests } = await verify({
     body: JSON.stringify({ permissions: { push: true, pull: true } }),
   });
@@ -62,21 +62,14 @@ test('refuses a token that cannot see the repository, naming installation', asyn
   assert.match(stderr, /installed on this repository/);
 });
 
-test('refuses a read-only token before the review runs', async () => {
-  const { exitCode, stderr } = await verify({
+test('admits a token GitHub reports no content write for', async () => {
+  // `permissions.push` describes content write, not the pull-request write a
+  // review needs. A fine-grained token holding exactly what this Action asks
+  // for reports `push: false`, so refusing on it would refuse the recommended
+  // configuration. Authorization is the review endpoint's to answer.
+  const { exitCode } = await verify({
     body: JSON.stringify({ permissions: { push: false, pull: true } }),
   });
-
-  assert.notEqual(exitCode, 0);
-  assert.match(stderr, /read-only/);
-  assert.match(stderr, /pull-requests write/);
-});
-
-test('admits a token whose permissions GitHub did not report', async () => {
-  // Absent permissions are GitHub's to omit. Refusing on an omission would
-  // refuse to run for the very identities this check exists to support, so an
-  // unreadable answer admits and leaves publication to report a real refusal.
-  const { exitCode } = await verify({ body: JSON.stringify({ id: 1 }) });
 
   assert.equal(exitCode, 0);
 });

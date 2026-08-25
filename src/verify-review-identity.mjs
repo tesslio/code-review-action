@@ -1,18 +1,25 @@
 #!/usr/bin/env node
 
 /**
- * Fail early when the token that will author the review cannot author one.
+ * Fail early when the token that will author the review cannot reach the
+ * repository at all.
  *
  * The review is published by the CLI, at the end of a job that has already
- * created a check run, checked out the head and installed the CLI. A credential
- * that cannot write is therefore discovered several minutes in, and reported as
- * a publication failure rather than as the configuration mistake it is. One
- * request up front turns that into a message naming the token.
+ * created a check run, checked out the head and installed the CLI. A token that
+ * is invalid, expired, or attached to an App nobody installed is therefore
+ * discovered several minutes in, and reported as a publication failure rather
+ * than as the configuration mistake it is. One request up front turns that into
+ * a message naming the token.
  *
- * What this deliberately does not check is whether the token may *approve*.
- * GitHub offers no way to ask ahead of time, and refusing to run on a guess
- * would replace a review that publishes findings as a comment — the CLI's own
- * fallback when an approval is refused — with no review at all.
+ * Reachability is the whole check, deliberately. GitHub exposes no pre-flight
+ * answer to the question that actually matters — may this token write a review —
+ * and the nearest available signal is wrong for it: `permissions.push` on a
+ * repository describes content write, so a fine-grained token holding exactly
+ * `contents: read` and `pull-requests: write`, which is what reviewing needs and
+ * what this Action asks for, can report `push: false`. Gating on it would refuse
+ * the recommended configuration outright, while still admitting a token with
+ * content write and no pull-request access. Authorization is left to the review
+ * endpoint, which answers it exactly.
  */
 
 import { requiredEnv } from './env.mjs';
@@ -24,9 +31,8 @@ const api = new GitHubCodeReviewApi({
   repository,
 });
 
-let repositoryData;
 try {
-  repositoryData = await api.request(`/repos/${repository}`);
+  await api.request(`/repos/${repository}`);
 } catch (error) {
   if (error instanceof GitHubApiError && error.status === 401) {
     throw new Error(
@@ -41,17 +47,4 @@ try {
   throw error;
 }
 
-/**
- * Absent permissions are not a refusal. The field is populated for the token
- * kinds seen so far, but it is GitHub's to omit, and treating an omission as a
- * failure would refuse to run for exactly the identities this input exists to
- * support. A present `push: false` is unambiguous and is refused.
- */
-const permissions = repositoryData?.permissions;
-if (permissions !== undefined && permissions !== null && !permissions.push) {
-  throw new Error(
-    `The github-token input has read-only access to ${repository}, so it cannot publish a review. Grant it pull-requests write and contents read.`,
-  );
-}
-
-console.log(`::notice::Reviews will be published to ${repository}.`);
+console.log(`::notice::The reviewing identity can reach ${repository}.`);
