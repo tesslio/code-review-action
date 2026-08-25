@@ -244,7 +244,8 @@ Gate mode connects the review outcome to the check result:
 
 - An approved review attempts to approve the pull request and succeeds.
 - A review that requires changes attempts to request changes, publishes the
-  complete review, and fails the check.
+  complete review, and fails the check. The workflow job still succeeds: the
+  run did what it was asked, and the verdict is what the check carries.
 - If GitHub does not permit the requested review event, the completed review is
   published as a comment instead, and the Action explains the repository
   configuration problem and fails the check.
@@ -287,6 +288,11 @@ advisory cannot turn advisory into a gate. What the advisory check tells you is
 whether the review reached a verdict, not whether the run was healthy: a run
 that broke reports neutral, and the breakage reaches you as a failed job and a
 pull-request comment.
+
+The job status answers the other question, in both modes: whether the Action
+ran. A review that completed never fails the job, whatever verdict it reached.
+A failing job means no review was published for the head that was checked,
+which is either breakage or the superseded case below.
 
 ### Superseded runs
 

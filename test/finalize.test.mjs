@@ -76,13 +76,13 @@ async function finalize({
   }
 }
 
-test('concludes the check run with the terminal status', async () => {
+test('carries requested changes on the check run, not the job', async () => {
   const { exitCode, outputs, requests } = await finalize({
     checkRunId: '987654',
     approved: false,
   });
 
-  assert.equal(exitCode, 1);
+  assert.equal(exitCode, 0);
   assert.match(outputs, /status=changes-requested/);
   assert.match(requests, /PATCH .*\/check-runs\/987654/);
   assert.match(requests, /"conclusion":"failure"/);
