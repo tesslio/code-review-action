@@ -173,10 +173,14 @@ commenter can spend the token at will. Tighten the list to suit the repository,
 or leave it out only if any commenter may request a review.
 
 The condition above is deliberately loose. A workflow expression cannot match a
-token boundary, so it tests for the handle anywhere in the body and the Action
-applies the exact rule: the handle as a whole token, case-insensitively, so
-`@tessl-code-reviewer` is not a request. A comment the Action does not admit ends
-the run with nothing published and `status: not-requested`.
+token boundary or read Markdown, so it tests for the handle anywhere in the body
+and the Action applies the exact rule: the handle as a whole token,
+case-insensitively, in text the comment is saying rather than showing, so
+`@tessl-code-reviewer` is not a request and neither is `` `@tessl-code-review` ``
+in a code span, a fenced block or a quoted line. That last part is what lets a
+comment write about the reviewer, or quote a round that mentioned it, without
+starting one. A comment the Action does not admit ends the run with nothing
+published and `status: not-requested`.
 
 The `issue.state` condition belongs in that prefilter: the Action refuses to
 review a closed or merged pull request, so without it a stray mention there starts

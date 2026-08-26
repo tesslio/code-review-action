@@ -41,7 +41,8 @@ test('a comment naming the handle as a whole token requests a review', async () 
     'fixes pushed\n@tessl-code-review',
     '@tessl-code-review, thanks',
     'ping @Tessl-Code-Review',
-    '`@tessl-code-review`',
+    'ran `bun test`, all green @tessl-code-review',
+    '> an earlier remark\n\n@tessl-code-review',
   ]) {
     const { exitCode, outputs } = await decide({ COMMENT_BODY: body });
 
@@ -55,6 +56,30 @@ test('a comment naming a longer handle requests nothing', async () => {
     '@tessl-code-reviewer take a look',
     '@tessl-code-review-bot take a look',
     'x@tessl-code-review',
+  ]) {
+    const { exitCode, outputs, stdout } = await decide({ COMMENT_BODY: body });
+
+    assert.equal(exitCode, 0, body);
+    assert.match(outputs, /requested=false/, body);
+    assert.match(outputs, /status=not-requested/, body);
+    assert.match(stdout, /::notice::No review requested/, body);
+  }
+});
+
+test('a comment showing or quoting the handle requests nothing', async () => {
+  for (const body of [
+    '`@tessl-code-review`',
+    'I am not going to fire another `@tessl-code-review` round',
+    'ask for one with ``@tessl-code-review``',
+    'trigger it with:\n\n```\n@tessl-code-review\n```\n',
+    '~~~\n@tessl-code-review\n~~~',
+    // A closing fence is at least as long as the one that opened the block, so
+    // the shorter run inside leaves the handle in code.
+    '````\n```\n@tessl-code-review\n```\n````',
+    // A span closes on a run of its own length, and may cross lines.
+    'the handle is `foo\n@tessl-code-review` there',
+    '> @tessl-code-review',
+    '> please @tessl-code-review look again',
   ]) {
     const { exitCode, outputs, stdout } = await decide({ COMMENT_BODY: body });
 

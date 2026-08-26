@@ -3,11 +3,11 @@
 /**
  * Decide whether the event that started this run is a request for a review.
  *
- * A comment requests a review by mentioning the review handle. Deciding that in a
- * caller means every caller reimplements one rule in a workflow expression plus a
- * shell step, where case, token boundaries and shell quoting are each easy to get
- * subtly wrong. It belongs here: a caller cannot get it wrong, and changing it
- * changes it for every caller at once.
+ * A comment requests a review by mentioning the review handle in its own voice.
+ * Deciding that in a caller means every caller reimplements one rule in a workflow
+ * expression plus a shell step, where case, token boundaries, Markdown and shell
+ * quoting are each easy to get subtly wrong. It belongs here: a caller cannot get
+ * it wrong, and changing it changes it for every caller at once.
  *
  * What a caller keeps is the coarse `if:` that stops GitHub starting a runner for
  * every comment in the repository. A workflow expression cannot match a token
@@ -32,6 +32,75 @@ const MENTION = new RegExp(
   `(^|[^a-zA-Z0-9_-])${HANDLE}([^a-zA-Z0-9_-]|$)`,
   'i',
 );
+const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const QUOTE = /^ {0,3}>/;
+
+/**
+ * The comment with the parts it is showing or quoting taken out: fenced blocks,
+ * quoted lines, and inline code spans, which close only on a backtick run of
+ * their own length and may cross lines.
+ *
+ * A comment writing about the reviewer puts the handle in backticks, and one
+ * quoting an earlier round carries that round's handle along with it. Neither is
+ * asking for anything, and treating them as requests is how a review round
+ * starts that nobody wanted.
+ */
+function ownVoice(body) {
+  const lines = [];
+  let fence = null;
+  for (const line of body.split('\n')) {
+    if (fence) {
+      if (new RegExp(`^ {0,3}${fence.char}{${fence.length},}\\s*$`).test(line)) {
+        fence = null;
+      }
+      continue;
+    }
+    const opening = FENCE.exec(line);
+    if (opening) {
+      fence = { char: opening[1][0], length: opening[1].length };
+      continue;
+    }
+    if (QUOTE.test(line)) continue;
+    lines.push(line);
+  }
+  return withoutCodeSpans(lines.join('\n'));
+}
+
+function withoutCodeSpans(text) {
+  const runs = [];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] !== '`') continue;
+    const start = index;
+    while (text[index] === '`') index += 1;
+    runs.push({ start, length: index - start });
+    index -= 1;
+  }
+
+  // Each run's partner is the next run of the same length, resolved in one pass
+  // so a comment full of unmatched backticks cannot be scanned repeatedly.
+  const partner = new Array(runs.length).fill(-1);
+  const nextOfLength = new Map();
+  for (let index = runs.length - 1; index >= 0; index -= 1) {
+    const seen = nextOfLength.get(runs[index].length);
+    if (seen !== undefined) partner[index] = seen;
+    nextOfLength.set(runs[index].length, index);
+  }
+
+  let out = '';
+  let cursor = 0;
+  let index = 0;
+  while (index < runs.length) {
+    if (partner[index] === -1) {
+      index += 1;
+      continue;
+    }
+    const close = runs[partner[index]];
+    out += `${text.slice(cursor, runs[index].start)} `;
+    cursor = close.start + close.length;
+    index = partner[index] + 1;
+  }
+  return out + text.slice(cursor);
+}
 const COMMENT_EVENTS = new Set([
   'issue_comment',
   'pull_request_review_comment',
@@ -91,10 +160,10 @@ function decide({
   prAuthor,
 }) {
   if (!COMMENT_EVENTS.has(eventName)) return { requested: true };
-  if (!MENTION.test(body ?? '')) {
+  if (!MENTION.test(ownVoice(body ?? ''))) {
     return {
       requested: false,
-      reason: `the comment does not mention ${HANDLE} as a whole token`,
+      reason: `the comment does not mention ${HANDLE} as a whole token outside code and quotes`,
     };
   }
   if (allowed === undefined) return { requested: true };

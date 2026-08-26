@@ -26,9 +26,11 @@ a token boundary, so that filter is loose on purpose.
 
 Everything after that is the Action's. Whether a comment is a request for a review
 is decided here, once, from the comment body and the author's association: the
-handle must appear as a whole token, case-insensitively, so `@tessl-code-reviewer`
-is not a request. A caller does not implement that rule and cannot disagree with
-it.
+handle must appear as a whole token, case-insensitively, and in the comment's own
+voice. Fenced blocks, quoted lines and inline code spans come out of the body
+first, so `@tessl-code-reviewer` is not a request and neither is the handle inside
+backticks or behind a `>`. A caller does not implement that rule and cannot
+disagree with it.
 
 `allowed-associations` has one exemption: the pull request's own author is always
 allowed to request a review of it. That is a policy statement — an author already
