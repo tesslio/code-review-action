@@ -78,6 +78,36 @@ jobs:
             echo "mention=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Who the review is published by. Without this the Action uses the
+      # workflow's own token and every review is authored by
+      # `github-actions[bot]`, the identity every other workflow here shares, so
+      # a review reads like a lint job in the timeline and in a notification.
+      #
+      # Failing soft on purpose. A minting failure that stopped the job would
+      # stop the review as well; the identity is the improvement, publishing the
+      # review is the function.
+      - name: Mint the reviewing identity
+        id: reviewer-token
+        if: github.event_name != 'issue_comment' || steps.gate.outputs.mention == 'true'
+        continue-on-error: true
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ secrets.TESSL_CODE_REVIEW_GH_APP_ID }}
+          private-key: ${{ secrets.TESSL_CODE_REVIEW_GH_APP_PRIVATE_KEY }}
+          # Only what publishing a review needs. The Action's own plumbing — the
+          # comment reaction, the check run, the failure notice — keeps using
+          # the workflow token, so this grants nothing for those.
+          permission-contents: read
+          permission-pull-requests: write
+
+      # A soft failure is silent by construction, and a review quietly signed by
+      # the wrong identity is the kind of regression nobody reports.
+      - name: Note a fallback to the workflow identity
+        if: steps.reviewer-token.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::warning::Could not mint the reviewing identity, so this review is published as github-actions[bot]. The review itself is unaffected. Check that the tessl-code-review App is installed on this repository and that TESSL_CODE_REVIEW_GH_APP_ID and TESSL_CODE_REVIEW_GH_APP_PRIVATE_KEY are readable here."
+
       # References the moving major tag, the same reference the README
       # recommends to every caller, so this repository runs what it ships.
       # The Action checks out the pull-request head itself, so this job needs
@@ -87,6 +117,11 @@ jobs:
         uses: tesslio/code-review-action@v1
         with:
           tessl-token: ${{ secrets.TESSL_TOKEN }}
+          # Empty when the step above failed or was skipped, and an input a
+          # caller passes overrides the Action's default however empty it is, so
+          # the fallback to the workflow identity is spelled out here rather
+          # than left to that default.
+          github-token: ${{ steps.reviewer-token.outputs.token || github.token }}
           # Named review profile. The standard profile is the supported default.
           profile: standard
           # gate publishes an approve or request-changes review and reports the
