@@ -42,6 +42,9 @@ test('a comment naming the handle as a whole token requests a review', async () 
     '@tessl-code-review, thanks',
     'ping @Tessl-Code-Review',
     'ran `bun test`, all green @tessl-code-review',
+    // Not a fence opener: a backtick fence's info string may not contain a
+    // backtick, so the request below it is not swallowed.
+    '```js `x`\n@tessl-code-review',
     '> an earlier remark\n\n@tessl-code-review',
   ]) {
     const { exitCode, outputs } = await decide({ COMMENT_BODY: body });

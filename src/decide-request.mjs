@@ -32,7 +32,7 @@ const MENTION = new RegExp(
   `(^|[^a-zA-Z0-9_-])${HANDLE}([^a-zA-Z0-9_-]|$)`,
   'i',
 );
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const QUOTE = /^ {0,3}>/;
 
 /**
@@ -56,7 +56,10 @@ function ownVoice(body) {
       continue;
     }
     const opening = FENCE.exec(line);
-    if (opening) {
+    // A backtick fence's info string may not itself contain a backtick, so a
+    // line like ```` ```lang` ```` opens nothing. Treating it as a fence would
+    // discard the rest of the comment, and a real request with it.
+    if (opening && !(opening[1][0] === '`' && opening[2].includes('`'))) {
       fence = { char: opening[1][0], length: opening[1].length };
       continue;
     }
