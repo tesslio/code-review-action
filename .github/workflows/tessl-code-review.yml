@@ -106,7 +106,7 @@ jobs:
         if: steps.reviewer-token.outcome == 'failure'
         shell: bash
         run: |
-          echo "::warning::Could not mint the reviewing identity, so this review is published as github-actions[bot]. The review itself is unaffected. Check that the tessl-code-review App is installed on this repository and that TESSL_CODE_REVIEW_GH_APP_ID and TESSL_CODE_REVIEW_GH_APP_PRIVATE_KEY are readable here."
+          echo "::warning::Could not mint the reviewing identity, so this run falls back to the workflow token and any review it publishes is authored by github-actions[bot]. Check that the tessl-code-review App is installed on this repository and that TESSL_CODE_REVIEW_GH_APP_ID and TESSL_CODE_REVIEW_GH_APP_PRIVATE_KEY are readable here."
 
       # References the moving major tag, the same reference the README
       # recommends to every caller, so this repository runs what it ships.
