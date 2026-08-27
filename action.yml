@@ -16,12 +16,13 @@ inputs:
       workflow's own token, which publishes as github-actions[bot]. Supply a
       GitHub App installation token or a machine-user token to publish under
       that identity instead; it needs pull-requests write and contents read on
-      this repository. Contents write is optional and adds one capability:
-      GitHub gates thread reopening behind it, so an identity holding contents
-      write reopens a resolved thread that still carries a finding requesting
-      changes, rather than republishing that finding as a new comment. The
-      reviewer probes each thread as it reviews, so nothing else changes.
-      The Action's own plumbing — the comment reaction, the
+      this repository. Contents write is optional. GitHub gates thread
+      reopening behind it, so an identity holding contents write reopens a
+      resolved thread that still carries a finding requesting changes, rather
+      than republishing that finding as a new comment. Reopening is the only
+      review behavior it adds; the grant itself is GitHub's general write
+      access to repository content, so weigh it as that rather than as a
+      review-scoped permission. The Action's own plumbing — the comment reaction, the
       check run and the failure notice — keeps using the workflow token
       whatever this is set to, so a supplied identity needs no permission
       beyond reviewing.

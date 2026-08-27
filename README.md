@@ -115,7 +115,9 @@ Contents write is optional. GitHub gates thread reopening behind it, so an
 identity holding contents write reopens a resolved thread that still carries a
 finding requesting changes, while one limited to contents read republishes that
 finding as a new inline comment instead. The reviewer probes each thread as it
-reviews, so granting contents write changes nothing else.
+reviews, so reopening is the only review behavior the grant adds. The grant is
+not review-scoped, though: contents write is GitHub's general write access to
+repository content, so weigh it against what else the identity could then do.
 
 An App that authors pull requests in the same repository should also be named
 in `approver-logins` if its comments are to request approvals, since an App
