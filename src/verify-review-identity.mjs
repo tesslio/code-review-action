@@ -15,8 +15,8 @@
  * answer to the question that actually matters — may this token write a review —
  * and the nearest available signal is wrong for it: `permissions.push` on a
  * repository describes content write, so a fine-grained token holding exactly
- * `contents: read` and `pull-requests: write`, which is what reviewing needs and
- * what this Action asks for, can report `push: false`. Gating on it would refuse
+ * `contents: read` and `pull-requests: write`, the baseline this Action
+ * requires, can report `push: false`. Gating on it would refuse
  * the recommended configuration outright, while still admitting a token with
  * content write and no pull-request access. Authorization is left to the review
  * endpoint, which answers it exactly.
