@@ -106,7 +106,18 @@ another identity, mint a token for it and pass it as `github-token`:
 The identity needs pull-requests write and contents read on the repository. It
 authors the review and nothing else: the comment reaction, the check run and
 the failure notice stay on the workflow's own token, so it needs no permission
-beyond reviewing. A machine-user token works the same way.
+beyond reviewing. A machine-user token works the same way. These permissions
+belong to the identity, granted by the App installation or to the machine user;
+the `permissions` block in the workflow examples grants the workflow's own
+token and does not reach them.
+
+Contents write is optional. GitHub gates thread reopening behind it, so an
+identity holding contents write reopens a resolved thread that still carries a
+finding requesting changes, while one limited to contents read republishes that
+finding as a new inline comment instead. The reviewer probes each thread as it
+reviews, so reopening is the only review behavior the grant adds. The grant is
+not review-scoped, though: contents write is GitHub's general write access to
+repository content, so weigh it against what else the identity could then do.
 
 An App that authors pull requests in the same repository should also be named
 in `approver-logins` if its comments are to request approvals, since an App
