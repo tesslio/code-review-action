@@ -72,9 +72,13 @@ export function configurationFailureReason(result) {
   const failure = result?.failure;
   if (result?.status !== 'failed') return undefined;
   if (failure === null || typeof failure !== 'object') return undefined;
-  const form = `${failure.stage}:${failure.kind}`;
-  if (!SURFACED_FAILURES.has(form)) return undefined;
+  // Each field is checked before it is joined. A one-element array carrying an
+  // admitted value stringifies to the admitted key, so matching the joined form
+  // is not on its own evidence that the document said what it appears to say.
+  if (typeof failure.stage !== 'string') return undefined;
+  if (typeof failure.kind !== 'string') return undefined;
   if (typeof failure.message !== 'string') return undefined;
+  if (!SURFACED_FAILURES.has(`${failure.stage}:${failure.kind}`)) return undefined;
   const reason = inlineSafe(failure.message);
   return reason === '' ? undefined : reason;
 }

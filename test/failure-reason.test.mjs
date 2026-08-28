@@ -47,6 +47,19 @@ test('withholds an admitted kind reported at another stage', () => {
   );
 });
 
+test('withholds a failure whose identifiers are not strings', () => {
+  assert.equal(
+    configurationFailureReason(
+      failed({
+        stage: ['validation'],
+        kind: ['invalid-request'],
+        message: 'a message from a document that is not what it appears to be',
+      }),
+    ),
+    undefined,
+  );
+});
+
 test('withholds a kind this revision does not name', () => {
   assert.equal(
     configurationFailureReason(
