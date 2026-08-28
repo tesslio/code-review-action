@@ -21,7 +21,7 @@ test('quotes the reason a run stopped on its own configuration', () => {
   );
 });
 
-test('withholds every kind outside the allowlist, whatever its stage', () => {
+test('withholds every failure outside the allowlist', () => {
   for (const failure of [
     { stage: 'model-validation', kind: 'unusable-model', message: 'a list' },
     { stage: 'executor-selection', kind: 'unknown-executor', message: 'a list' },
@@ -32,6 +32,19 @@ test('withholds every kind outside the allowlist, whatever its stage', () => {
   ]) {
     assert.equal(configurationFailureReason(failed(failure)), undefined);
   }
+});
+
+test('withholds an admitted kind reported at another stage', () => {
+  assert.equal(
+    configurationFailureReason(
+      failed({
+        stage: 'execution',
+        kind: 'invalid-request',
+        message: 'a message this allowlist was not written against',
+      }),
+    ),
+    undefined,
+  );
 });
 
 test('withholds a kind this revision does not name', () => {

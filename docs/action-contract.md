@@ -203,10 +203,10 @@ and, when a review does not complete, the visible failure notice.
 A run that stopped before reviewing anything adds one more sentence to both: the
 reason the CLI gave for stopping, quoted inside a code span, so that a profile
 naming a file that does not exist is distinguishable from a crashed CLI without
-opening the workflow run. It is published only for an allowlist of failure kinds
-whose message is composed from a fixed sentence and the caller's own input — a
-flag, a path in their profile, a name they typed. Every other failure keeps the
-status sentence alone.
+opening the workflow run. It is published only for an allowlist of failures,
+named by stage and kind together, whose message is composed from a fixed sentence
+and the caller's own configuration — a flag, a path in their profile, a name they
+typed. Every other failure keeps the status sentence alone.
 
 The CLI stamps a hidden AI-system notice on the review it publishes, because a
 review is a model's output. That is the CLI's behaviour, not this Action's: the

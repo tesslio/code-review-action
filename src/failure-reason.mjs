@@ -8,27 +8,32 @@
  * arrive as one sentence pointing at the workflow run.
  *
  * The check run and the notice are as public as the repository, so this is an
- * allowlist of the kinds whose message is composed from a fixed sentence and
+ * allowlist of the failures whose message is composed from a fixed sentence and
  * the caller's own configuration: a flag they passed, a name they typed, or a
- * path read from a profile in the repository being reviewed. A kind that is not named here is withheld, whatever its stage,
- * because a message can also describe the account, the provider, or the review
- * itself. Withholding is also the answer for a kind this revision has never
- * heard of, so a later CLI cannot widen what is published by adding one.
+ * path read from a profile in the repository being reviewed. A failure that is
+ * not named here is withheld, because a message can also describe the account,
+ * the provider, or the review itself.
+ *
+ * Each entry names the stage and the kind together. The CLI is the caller's to
+ * choose and versions independently of this Action, so the pair is what pins a
+ * message to the failure this allowlist was written against: a later CLI that
+ * reuses one of these kinds at another stage, or adds a stage of its own,
+ * publishes nothing until an entry here says otherwise.
  */
 
-const SURFACED_KINDS = new Set([
+const SURFACED_FAILURES = new Set([
   // A flag combination, selector, or request the CLI rejected.
-  'invalid-selector',
-  'invalid-request',
-  'publish-with-fixture',
-  'restricted-override',
-  'too-many-lenses',
+  'validation:invalid-selector',
+  'validation:invalid-request',
+  'validation:publish-with-fixture',
+  'validation:restricted-override',
+  'validation:too-many-lenses',
   // The caller's own profile file: its path, and what is wrong inside it.
-  'invalid-profile-file',
+  'validation:invalid-profile-file',
   // A profile name that is not one of the named profiles.
-  'unknown-profile',
+  'profile:unknown-profile',
   // A fixed sentence naming the login command.
-  'authentication-required',
+  'authentication:authentication-required',
 ]);
 
 // Long enough for the longest sentence this allowlist admits, short enough that
@@ -59,14 +64,16 @@ function inlineSafe(message) {
 /**
  * The CLI's own reason for stopping, ready to render inside a code span, or
  * `undefined` when there is none to surface. A result this revision does not
- * recognise, a kind outside the allowlist, and an absent or empty message all
- * return `undefined`, so a caller renders its generic sentence unchanged.
+ * recognise, a stage and kind outside the allowlist, and an absent or empty
+ * message all return `undefined`, so a caller renders its generic sentence
+ * unchanged.
  */
 export function configurationFailureReason(result) {
   const failure = result?.failure;
   if (result?.status !== 'failed') return undefined;
   if (failure === null || typeof failure !== 'object') return undefined;
-  if (!SURFACED_KINDS.has(failure.kind)) return undefined;
+  const form = `${failure.stage}:${failure.kind}`;
+  if (!SURFACED_FAILURES.has(form)) return undefined;
   if (typeof failure.message !== 'string') return undefined;
   const reason = inlineSafe(failure.message);
   return reason === '' ? undefined : reason;

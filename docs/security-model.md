@@ -64,10 +64,12 @@ publish for a superseded head. What this Action still owes:
   CLI adds later is dropped until it is added to the documented schema.
 - Do not include prompts, source contents, credentials, or debug output.
 - Publish a CLI failure message to the check run or the failure notice only for
-  an allowlist of failure kinds, each carrying a message composed from a fixed
-  sentence and the caller's own input. A kind this revision does not name is
-  withheld, whatever its stage, because a failure message can also describe the
-  account, the provider, or the review itself. What is published is reduced to a
+  an allowlist of failures, named by stage and kind together, each carrying a
+  message composed from a fixed sentence and the caller's own configuration. A
+  failure this revision does not name is withheld, because a failure message can
+  also describe the account, the provider, or the review itself. Naming the pair
+  keeps a later CLI from widening the surface by reusing an admitted kind
+  elsewhere. What is published is reduced to a
   single line, stripped of control and format characters, and truncated, so it
   cannot carry a payload, reorder what a reader sees, or escape the code span it
   renders in.
