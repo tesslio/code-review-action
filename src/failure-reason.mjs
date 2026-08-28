@@ -14,26 +14,33 @@
  * not named here is withheld, because a message can also describe the account,
  * the provider, or the review itself.
  *
- * Each entry names the stage and the kind together. The CLI is the caller's to
- * choose and versions independently of this Action, so the pair is what pins a
- * message to the failure this allowlist was written against: a later CLI that
- * reuses one of these kinds at another stage, or adds a stage of its own,
- * publishes nothing until an entry here says otherwise.
+ * A stage names the kinds admitted within it, and the two are matched as
+ * separate values rather than as one joined key, so no field's contents can
+ * compose the appearance of an admitted pair. The CLI is the caller's to choose
+ * and versions independently of this Action, so the pair is what pins a message
+ * to the failure this allowlist was written against: a later CLI that reuses one
+ * of these kinds at another stage, or adds a stage of its own, publishes nothing
+ * until an entry here says otherwise.
  */
 
-const SURFACED_FAILURES = new Set([
-  // A flag combination, selector, or request the CLI rejected.
-  'validation:invalid-selector',
-  'validation:invalid-request',
-  'validation:publish-with-fixture',
-  'validation:restricted-override',
-  'validation:too-many-lenses',
-  // The caller's own profile file: its path, and what is wrong inside it.
-  'validation:invalid-profile-file',
+const SURFACED_FAILURES = new Map([
+  [
+    'validation',
+    new Set([
+      // A flag combination, selector, or request the CLI rejected.
+      'invalid-selector',
+      'invalid-request',
+      'publish-with-fixture',
+      'restricted-override',
+      'too-many-lenses',
+      // The caller's own profile file: its path, and what is wrong inside it.
+      'invalid-profile-file',
+    ]),
+  ],
   // A profile name that is not one of the named profiles.
-  'profile:unknown-profile',
+  ['profile', new Set(['unknown-profile'])],
   // A fixed sentence naming the login command.
-  'authentication:authentication-required',
+  ['authentication', new Set(['authentication-required'])],
 ]);
 
 // Long enough for the longest sentence this allowlist admits, short enough that
@@ -72,13 +79,12 @@ export function configurationFailureReason(result) {
   const failure = result?.failure;
   if (result?.status !== 'failed') return undefined;
   if (failure === null || typeof failure !== 'object') return undefined;
-  // Each field is checked before it is joined. A one-element array carrying an
-  // admitted value stringifies to the admitted key, so matching the joined form
-  // is not on its own evidence that the document said what it appears to say.
+  // Each field is compared as its own value. Nothing is concatenated, so no
+  // combination of contents can compose the appearance of an admitted pair.
   if (typeof failure.stage !== 'string') return undefined;
   if (typeof failure.kind !== 'string') return undefined;
   if (typeof failure.message !== 'string') return undefined;
-  if (!SURFACED_FAILURES.has(`${failure.stage}:${failure.kind}`)) return undefined;
+  if (!SURFACED_FAILURES.get(failure.stage)?.has(failure.kind)) return undefined;
   const reason = inlineSafe(failure.message);
   return reason === '' ? undefined : reason;
 }

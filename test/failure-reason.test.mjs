@@ -60,6 +60,16 @@ test('withholds a failure whose identifiers are not strings', () => {
   );
 });
 
+test('withholds identifiers that compose an admitted pair between them', () => {
+  for (const failure of [
+    { stage: 'validation:invalid-request', kind: '', message: 'forged' },
+    { stage: 'validation', kind: 'invalid-request:x', message: 'forged' },
+    { stage: '', kind: 'validation:invalid-request', message: 'forged' },
+  ]) {
+    assert.equal(configurationFailureReason(failed(failure)), undefined);
+  }
+});
+
 test('withholds a kind this revision does not name', () => {
   assert.equal(
     configurationFailureReason(
