@@ -68,8 +68,9 @@ publish for a superseded head. What this Action still owes:
   sentence and the caller's own input. A kind this revision does not name is
   withheld, whatever its stage, because a failure message can also describe the
   account, the provider, or the review itself. What is published is reduced to a
-  single line and truncated, so it cannot carry a payload or escape the code
-  span it renders in.
+  single line, stripped of control and format characters, and truncated, so it
+  cannot carry a payload, reorder what a reader sees, or escape the code span it
+  renders in.
 
 ### Comment-driven triggers
 

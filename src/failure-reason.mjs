@@ -9,8 +9,8 @@
  *
  * The check run and the notice are as public as the repository, so this is an
  * allowlist of the kinds whose message is composed from a fixed sentence and
- * the caller's own input: a flag they passed, a path in their profile, a name
- * they typed. A kind that is not named here is withheld, whatever its stage,
+ * the caller's own configuration: a flag they passed, a name they typed, or a
+ * path read from a profile in the repository being reviewed. A kind that is not named here is withheld, whatever its stage,
  * because a message can also describe the account, the provider, or the review
  * itself. Withholding is also the answer for a kind this revision has never
  * heard of, so a later CLI cannot widen what is published by adding one.
@@ -38,13 +38,16 @@ const MAX_LENGTH = 500;
 /**
  * Reduce a message to a single line that is safe inside a Markdown code span.
  *
- * Control characters and newlines go because the reason is rendered inline; a
+ * Control characters and newlines go because the reason is rendered inline. A
  * backtick goes because it would close the span and let the rest of the message
- * render as Markdown.
+ * render as Markdown. Format characters go because a bidirectional override
+ * renders text in an order other than the one it is written in, and a code span
+ * does not stop that.
  */
 function inlineSafe(message) {
   const collapsed = message
     .replace(/[\u0000-\u001F\u007F]+/gu, ' ')
+    .replace(/\p{Cf}+/gu, '')
     .replace(/`/gu, "'")
     .replace(/\s+/gu, ' ')
     .trim();

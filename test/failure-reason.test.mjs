@@ -72,6 +72,21 @@ test('renders as one line that cannot escape a code span', () => {
   assert.match(reason, /Unknown profile 'rogue'/);
 });
 
+test('strips formatting controls that reorder what a reader sees', () => {
+  const override = String.fromCodePoint(0x202e);
+  const isolate = String.fromCodePoint(0x2066);
+  const reason = configurationFailureReason(
+    failed({
+      stage: 'validation',
+      kind: 'invalid-profile-file',
+      message: `Could not read "${override}gpj.exe${isolate}" from the profile.`,
+    }),
+  );
+
+  assert.doesNotMatch(reason, /\p{Cf}/u);
+  assert.match(reason, /Could not read "gpj\.exe" from the profile\./);
+});
+
 test('truncates a message too long to be a configuration sentence', () => {
   const reason = configurationFailureReason(
     failed({
