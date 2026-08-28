@@ -21,20 +21,23 @@ test('quotes the reason a run stopped on its own configuration', () => {
   );
 });
 
-test('withholds a message that can carry model output or a provider response', () => {
+test('withholds every kind outside the allowlist, whatever its stage', () => {
   for (const failure of [
-    { stage: 'execution', kind: 'executor-error', message: 'reviewed source' },
-    { stage: 'internal', kind: 'unexpected-error', message: 'a stack trace' },
+    { stage: 'model-validation', kind: 'unusable-model', message: 'a list' },
+    { stage: 'executor-selection', kind: 'unknown-executor', message: 'a list' },
+    { stage: 'profile', kind: 'lens-resolution', message: 'a resolver error' },
     { stage: 'preparation', kind: 'provider-error', message: 'a response body' },
+    { stage: 'execution', kind: 'executor-error', message: 'a review' },
+    { stage: 'internal', kind: 'unexpected-error', message: 'a stack trace' },
   ]) {
     assert.equal(configurationFailureReason(failed(failure)), undefined);
   }
 });
 
-test('withholds a stage this revision does not recognize', () => {
+test('withholds a kind this revision does not name', () => {
   assert.equal(
     configurationFailureReason(
-      failed({ stage: 'a-later-stage', kind: 'whatever', message: 'text' }),
+      failed({ stage: 'validation', kind: 'a-later-kind', message: 'text' }),
     ),
     undefined,
   );
@@ -72,8 +75,8 @@ test('renders as one line that cannot escape a code span', () => {
 test('truncates a message too long to be a configuration sentence', () => {
   const reason = configurationFailureReason(
     failed({
-      stage: 'credit',
-      kind: 'insufficient-credit',
+      stage: 'validation',
+      kind: 'invalid-request',
       message: 'x'.repeat(2000),
     }),
   );

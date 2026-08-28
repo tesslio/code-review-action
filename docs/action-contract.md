@@ -201,12 +201,12 @@ earlier findings across rounds. The **Action** publishes the check-run summary
 and, when a review does not complete, the visible failure notice.
 
 A run that stopped before reviewing anything adds one more sentence to both: the
-reason the CLI gave for stopping, quoted inside a code span. It is published only
-for the failure stages that describe the run's own configuration and inputs, so
-that a profile naming a file that does not exist is distinguishable from a
-crashed CLI without opening the workflow run. A failure from the executor, an
-unexpected exception, and a provider's response body are not published; those
-keep the status sentence alone.
+reason the CLI gave for stopping, quoted inside a code span, so that a profile
+naming a file that does not exist is distinguishable from a crashed CLI without
+opening the workflow run. It is published only for an allowlist of failure kinds
+whose message is composed from a fixed sentence and the caller's own input — a
+flag, a path in their profile, a name they typed. Every other failure keeps the
+status sentence alone.
 
 The CLI stamps a hidden AI-system notice on the review it publishes, because a
 review is a model's output. That is the CLI's behaviour, not this Action's: the

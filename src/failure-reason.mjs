@@ -2,36 +2,37 @@
  * The one sentence a maintainer needs when a run failed before it reviewed
  * anything.
  *
- * The CLI already reports why it stopped, as a `stage`/`kind` pair and an
- * actionable `message`. Until now the Action read that only to decide a
- * conclusion, so every failure reached the pull request as the same sentence
- * pointing at the workflow run: a profile naming a lens file that does not
- * exist was indistinguishable from a crashed CLI, and telling them apart meant
- * opening the run and scrolling the log.
+ * The CLI reports why it stopped as a `stage`/`kind` pair and a `message`.
+ * Without a reason, every such failure reads the same on the pull request — a
+ * profile that names a file which is not there, and a CLI that crashed, both
+ * arrive as one sentence pointing at the workflow run.
  *
- * Only the stages below are surfaced. Their messages describe the run's own
- * configuration and inputs: a flag, a profile, a model, a credential, which is
- * what a maintainer can act on, and the CLI writes them itself rather than
- * assembling them from anything it read. `execution` and `internal` are
- * withheld because a message from either can carry model output or an arbitrary
- * exception, and `provider-error` because it can echo a provider's response
- * body verbatim. Those keep the generic sentence and the workflow run.
+ * The check run and the notice are as public as the repository, so this is an
+ * allowlist of the kinds whose message is composed from a fixed sentence and
+ * the caller's own input: a flag they passed, a path in their profile, a name
+ * they typed. A kind that is not named here is withheld, whatever its stage,
+ * because a message can also describe the account, the provider, or the review
+ * itself. Withholding is also the answer for a kind this revision has never
+ * heard of, so a later CLI cannot widen what is published by adding one.
  */
 
-const SURFACED_STAGES = new Set([
-  'validation',
-  'authentication',
-  'credit',
-  'preparation',
-  'profile',
-  'model-validation',
-  'executor-selection',
+const SURFACED_KINDS = new Set([
+  // A flag combination, selector, or request the CLI rejected.
+  'invalid-selector',
+  'invalid-request',
+  'publish-with-fixture',
+  'restricted-override',
+  'too-many-lenses',
+  // The caller's own profile file: its path, and what is wrong inside it.
+  'invalid-profile-file',
+  // A profile name that is not one of the named profiles.
+  'unknown-profile',
+  // A fixed sentence naming the login command.
+  'authentication-required',
 ]);
 
-const WITHHELD_KINDS = new Set(['provider-error']);
-
-// Long enough for the CLI's longest configuration sentence, short enough that a
-// message which is not one cannot fill a comment.
+// Long enough for the longest sentence this allowlist admits, short enough that
+// a message which is not one cannot fill a comment.
 const MAX_LENGTH = 500;
 
 /**
@@ -55,15 +56,14 @@ function inlineSafe(message) {
 /**
  * The CLI's own reason for stopping, ready to render inside a code span, or
  * `undefined` when there is none to surface. A result this revision does not
- * recognise, a withheld stage, and an absent or empty message all return
- * `undefined`, so a caller renders its generic sentence unchanged.
+ * recognise, a kind outside the allowlist, and an absent or empty message all
+ * return `undefined`, so a caller renders its generic sentence unchanged.
  */
 export function configurationFailureReason(result) {
   const failure = result?.failure;
   if (result?.status !== 'failed') return undefined;
   if (failure === null || typeof failure !== 'object') return undefined;
-  if (!SURFACED_STAGES.has(failure.stage)) return undefined;
-  if (WITHHELD_KINDS.has(failure.kind)) return undefined;
+  if (!SURFACED_KINDS.has(failure.kind)) return undefined;
   if (typeof failure.message !== 'string') return undefined;
   const reason = inlineSafe(failure.message);
   return reason === '' ? undefined : reason;

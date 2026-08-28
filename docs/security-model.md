@@ -64,11 +64,12 @@ publish for a superseded head. What this Action still owes:
   CLI adds later is dropped until it is added to the documented schema.
 - Do not include prompts, source contents, credentials, or debug output.
 - Publish a CLI failure message to the check run or the failure notice only for
-  the failure stages that describe the run's own configuration and inputs, by an
-  allowlist that drops a stage this revision does not recognize. A message from
-  the executor, an unexpected exception, and a provider's response body are
-  withheld. What is published is reduced to a single line and truncated, so it
-  cannot carry a payload or escape the code span it renders in.
+  an allowlist of failure kinds, each carrying a message composed from a fixed
+  sentence and the caller's own input. A kind this revision does not name is
+  withheld, whatever its stage, because a failure message can also describe the
+  account, the provider, or the review itself. What is published is reduced to a
+  single line and truncated, so it cannot carry a payload or escape the code
+  span it renders in.
 
 ### Comment-driven triggers
 
