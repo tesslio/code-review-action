@@ -343,6 +343,7 @@ runs:
         GH_TOKEN: ${{ github.token }}
         REPOSITORY: ${{ github.repository }}
         PR_NUMBER: ${{ steps.pr.outputs.number }}
+        REVIEW_OUTPUT: ${{ steps.review.outputs['result-path'] }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: node "$GITHUB_ACTION_PATH/src/publish-failure.mjs"
 

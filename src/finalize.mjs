@@ -10,6 +10,7 @@ import {
 import { optionalPositiveIntegerEnv, requiredEnv } from './env.mjs';
 import { publishApprovalRefusalNotice } from './approval-refusal-notice.mjs';
 import { removeFailureNotices } from './failure-notice.mjs';
+import { configurationFailureReason } from './failure-reason.mjs';
 import { GitHubCodeReviewApi } from './github-api.mjs';
 import { ResultFileError, readReviewResult } from './result-file.mjs';
 
@@ -24,7 +25,7 @@ function githubApi() {
 
 // An absent identifier means no check run was created, so there is nothing to
 // conclude.
-async function concludeCheckRun(status) {
+async function concludeCheckRun(status, reason) {
   const checkRunId = optionalPositiveIntegerEnv('CHECK_RUN_ID');
   if (checkRunId === undefined) return;
   await concludeReviewCheckRun({
@@ -32,6 +33,7 @@ async function concludeCheckRun(status) {
     checkRunId,
     mode,
     status,
+    reason,
     detailsUrl: requiredEnv('RUN_URL'),
   });
 }
@@ -84,6 +86,10 @@ async function answerRefusedApprovalRequest() {
 }
 
 let conclusion;
+// The CLI's own reason for stopping, when it left one this Action publishes.
+// Read from the same result the conclusion is computed from, so the check
+// cannot report a reason for a run it concluded from something else.
+let failureReason;
 try {
   // A step that never ran leaves its outputs empty rather than unset, so an
   // empty path is the review not having produced a result at all — which is a
@@ -99,11 +105,12 @@ try {
     result,
     headSha: process.env.HEAD_SHA,
   });
+  failureReason = configurationFailureReason(result);
 } catch (error) {
   if (!(error instanceof ResultFileError)) {
     // A check run left in progress holds every pull request that requires it,
     // so conclude it before failing.
-    await concludeCheckRun('technical-failure');
+    await concludeCheckRun('technical-failure', failureReason);
     throw error;
   }
   // The CLI left no usable result, so the review is what failed. It is a
@@ -138,7 +145,7 @@ try {
     'utf8',
   );
 } finally {
-  await concludeCheckRun(conclusion.status);
+  await concludeCheckRun(conclusion.status, failureReason);
 }
 
 process.exitCode = conclusion.exitCode;

@@ -115,16 +115,23 @@ function summaryFor(report, mode) {
  * Maps a terminal Action status onto the check-run conclusion and output text
  * for the requested mode. Advisory never concludes failure, so requiring the
  * check in branch protection cannot turn advisory mode into a gate.
+ *
+ * A `reason` is the CLI's own sentence about why it stopped, and follows the
+ * status sentence rather than replacing it: the status is what the check
+ * asserts about the commit, and the reason is what the maintainer fixes. The
+ * caller decides which reasons are publishable; this renders whatever it is
+ * given inside a code span, so it must arrive safe for one.
  */
-export function checkRunReport({ mode, status }) {
+export function checkRunReport({ mode, status, reason }) {
   if (mode !== 'advisory' && mode !== 'gate') {
     throw new Error('mode must be advisory or gate.');
   }
   const report = REPORTS[status] ?? UNRECOGNIZED_REPORT;
+  const summary = summaryFor(report, mode);
   return {
     conclusion: report[mode],
     title: report.title,
-    summary: summaryFor(report, mode),
+    summary: reason ? `${summary}\n\nThe Tessl CLI reported: \`${reason}\`` : summary,
   };
 }
 
@@ -173,11 +180,12 @@ export async function concludeReviewCheckRun({
   checkRunId,
   mode,
   status,
+  reason,
   detailsUrl,
   log = console,
 }) {
   try {
-    const report = checkRunReport({ mode, status });
+    const report = checkRunReport({ mode, status, reason });
     await api.updateCheckRun(checkRunId, {
       status: 'completed',
       conclusion: report.conclusion,

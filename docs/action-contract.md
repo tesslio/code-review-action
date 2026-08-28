@@ -200,14 +200,23 @@ review itself: its body, the inline findings, and the replies that reconcile
 earlier findings across rounds. The **Action** publishes the check-run summary
 and, when a review does not complete, the visible failure notice.
 
+A run that stopped before reviewing anything adds one more sentence to both: the
+reason the CLI gave for stopping, quoted inside a code span, so that a profile
+naming a file that does not exist is distinguishable from a crashed CLI without
+opening the workflow run. It is published only for an allowlist of failures,
+named by stage and kind together, whose message is composed from a fixed sentence
+and the caller's own configuration — a flag, a path in their profile, a name they
+typed. Every other failure keeps the status sentence alone.
+
 The CLI stamps a hidden AI-system notice on the review it publishes, because a
 review is a model's output. That is the CLI's behaviour, not this Action's: the
 Action neither adds the notice nor verifies that the installed CLI did. The
-Action's own bodies carry no marker of their own: a check-run summary is one of a
-fixed set of status sentences written by hand, and the failure notice is a
-hand-written sentence published precisely when the model produced nothing.
-Labelling either as model output would make the marker mean less wherever it does
-appear, and it is an HTML comment, so filtering is the only thing it is for.
+Action's own bodies carry no marker of their own: a check-run summary is a status
+sentence written by hand, optionally followed by a quoted reason the CLI's own
+code wrote, and the failure notice is the same pair published precisely when the
+model produced nothing. Neither half is model output, and labelling them as such
+would make the marker mean less wherever it does appear; it is an HTML comment,
+so filtering is the only thing it is for.
 
 The published review body carries HTML comment markers. Most are internal: the
 CLI uses them to find its own review, thread, and replies across runs. The other
