@@ -118,6 +118,48 @@ test('reports an unreadable result as a review failure without a second annotati
   }
 });
 
+test('the check run names the configuration that stopped the review', async () => {
+  const { exitCode, outputs, requests } = await finalize({
+    checkRunId: '987654',
+    reviewExitCode: '1',
+    result: JSON.stringify({
+      status: 'failed',
+      failure: {
+        stage: 'validation',
+        kind: 'invalid-profile-file',
+        message:
+          'Invalid Code Review profile "./.tessl-code-review.yml": Lens ref "./review-lenses/gone/SKILL.md" does not resolve to a readable path.',
+      },
+      diagnostics: { durationMs: 35 },
+    }),
+  });
+
+  assert.notEqual(exitCode, 0);
+  assert.match(outputs, /status=technical-failure/);
+  assert.match(requests, /does not resolve to a readable path/);
+  // The status sentence stays: the reason follows it rather than replacing it.
+  assert.match(requests, /Review did not complete/);
+});
+
+test('the check run withholds a failure message from the executor', async () => {
+  const { requests } = await finalize({
+    checkRunId: '987654',
+    reviewExitCode: '1',
+    result: JSON.stringify({
+      status: 'failed',
+      failure: {
+        stage: 'execution',
+        kind: 'executor-error',
+        message: 'a sentence quoting the reviewed source',
+      },
+      diagnostics: { durationMs: 35 },
+    }),
+  });
+
+  assert.doesNotMatch(requests, /reviewed source/);
+  assert.match(requests, /Open the workflow run for details/);
+});
+
 test('a superseded run explains itself in the run and the check', async () => {
   const { exitCode, stdout, outputs, requests } = await finalize({
     checkRunId: '987654',
