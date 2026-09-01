@@ -159,18 +159,14 @@ test('reports a check run on the reviewed head and concludes it at finalize', ()
     action,
     /CHECK_RUN_ID: \$\{\{ steps\.check\.outputs\['check-run-id'\] \}\}/,
   );
-  // Concluding runs for a failed review, so it cannot be gated on success — and
-  // it is no longer gated on the check run existing either. The step also writes
-  // the terminal status output and the review's job summary, and a caller
-  // without `checks: write` needs both: that configuration has no check to read,
-  // so denying it a summary too left the review readable nowhere. The script
-  // skips concluding a check run whose identifier was never set.
+  // Concluding runs for a failed review, so it cannot be gated on success — but
+  // it has nothing to conclude before the check run exists, and a step failing
+  // ahead of that would otherwise finalize against empty outputs.
   const finalize = action.slice(
     action.indexOf('- name: Apply review conclusion'),
     action.indexOf('src/finalize.mjs'),
   );
-  assert.doesNotMatch(finalize, /steps\.check\.outputs\['check-run-id'\] != ''/);
-  assert.match(finalize, /always\(\) && steps\.request\.outputs\.requested == 'true'/);
+  assert.match(finalize, /steps\.check\.outputs\['check-run-id'\] != ''/);
 });
 
 test('runs trusted support from the pinned Action path', () => {

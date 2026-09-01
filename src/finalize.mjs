@@ -12,8 +12,12 @@ import { publishApprovalRefusalNotice } from './approval-refusal-notice.mjs';
 import { removeFailureNotices } from './failure-notice.mjs';
 import { configurationFailureReason } from './failure-reason.mjs';
 import { GitHubCodeReviewApi } from './github-api.mjs';
-import { writeJobSummary } from './job-summary.mjs';
-import { ResultFileError, readReviewResult } from './result-file.mjs';
+import {
+  PUBLISHED_STATUSES,
+  ResultFileError,
+  publicationReceipt,
+  readReviewResult,
+} from './result-file.mjs';
 
 const mode = requiredEnv('MODE');
 
@@ -142,30 +146,38 @@ if (conclusion.status === 'refused-approval-request') {
 }
 
 /**
- * Write the review to the run's job summary.
+ * Put the published review on the run page.
  *
- * Here rather than in its own step because this is where the result, the mode,
- * the reviewed head and the terminal status are already resolved together — and
- * the summary has to describe the same status the check run concludes with.
- *
- * Best effort, like everything else published from here. It runs for a failed
- * run too: when publication fails, the summary is the only place the completed
- * review can still be read.
+ * Fetched rather than re-rendered: GitHub already holds the review, so the run
+ * page and the pull request carry one text produced once, with no second
+ * renderer to keep in step. Best effort, like everything else published here.
  */
-async function writeReviewJobSummary(result, status, reason) {
-  await writeJobSummary({
-    summaryPath: process.env.GITHUB_STEP_SUMMARY,
-    result,
-    mode,
-    status,
-    reason,
-    runUrl: process.env.RUN_URL,
-    repository: process.env.REPOSITORY,
-    prNumber: process.env.PR_NUMBER,
-  });
+async function writePublishedReviewToJobSummary(result) {
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  const prNumber = optionalPositiveIntegerEnv('PR_NUMBER');
+  const receipt = publicationReceipt(result);
+  if (
+    summaryPath === undefined ||
+    summaryPath === '' ||
+    prNumber === undefined ||
+    receipt === undefined ||
+    !PUBLISHED_STATUSES.has(receipt.status) ||
+    receipt.reviewId === undefined
+  ) {
+    return;
+  }
+  try {
+    const review = await githubApi().pullRequestReview(prNumber, receipt.reviewId);
+    if (typeof review?.body !== 'string' || review.body === '') return;
+    await appendFile(summaryPath, `${review.body}\n`, 'utf8');
+  } catch (error) {
+    console.log(
+      `::notice::The published review could not be added to the job summary: ${error}. The review itself is unaffected.`,
+    );
+  }
 }
 
-await writeReviewJobSummary(reviewResult, conclusion.status, failureReason);
+await writePublishedReviewToJobSummary(reviewResult);
 
 // The check run carries the computed status even when the step output cannot
 // be written, and that write still fails the step afterwards.

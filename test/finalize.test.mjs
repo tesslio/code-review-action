@@ -22,10 +22,12 @@ async function finalize({
   headSha,
   reviewOutput,
   writableOutputs = true,
+  jobSummary = true,
 }) {
   const directory = await mkdtemp(join(tmpdir(), 'code-review-action-test-'));
   const outputs = join(directory, 'outputs');
   const requests = join(directory, 'requests');
+  const summary = join(directory, 'summary');
   await writeFile(
     join(directory, 'result.json'),
     result ??
@@ -37,6 +39,7 @@ async function finalize({
   );
   await writeFile(outputs, '');
   await writeFile(requests, '');
+  await writeFile(summary, '');
 
   try {
     const completed = await run(
@@ -61,6 +64,7 @@ async function finalize({
             ? outputs
             : join(directory, 'absent', 'outputs'),
           REQUEST_LOG: requests,
+          ...(jobSummary ? { GITHUB_STEP_SUMMARY: summary } : {}),
           ...(checkRunId === undefined ? {} : { CHECK_RUN_ID: checkRunId }),
         },
       },
@@ -70,6 +74,7 @@ async function finalize({
       stdout: completed.stdout ?? '',
       outputs: await readFile(outputs, 'utf8'),
       requests: (await readFile(requests, 'utf8')).trim(),
+      summary: await readFile(summary, 'utf8'),
     };
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -304,4 +309,45 @@ test('a review step that never ran concludes rather than crashing', async () => 
   assert.equal(exitCode, 1);
   assert.match(outputs, /status=technical-failure/);
   assert.match(requests, /PATCH .*\/check-runs\/987654/);
+});
+
+test('puts the published review on the run page, fetched rather than re-rendered', async () => {
+  const { summary, requests } = await finalize({
+    checkRunId: '987654',
+    publication: { status: 'published', reviewId: 987654 },
+  });
+
+  assert.match(requests, /GET .*\/pulls\/42\/reviews\/987654/);
+  assert.match(summary, /^## Tessl Code Review$/mu);
+  assert.match(summary, /^### Changes approved$/mu);
+});
+
+test('adds nothing to the run page when no review was published', async () => {
+  for (const publication of [
+    { status: 'superseded', reviewId: 987654 },
+    { status: 'published-with-policy-fallback', reviewId: 987654 },
+    // Published, but the receipt named no review to fetch.
+    { status: 'published' },
+    undefined,
+  ]) {
+    const { summary, requests } = await finalize({
+      checkRunId: '987654',
+      publication,
+    });
+
+    assert.equal(summary, '');
+    assert.doesNotMatch(requests, /\/reviews\//);
+  }
+});
+
+test('a run with no job summary asks for nothing and says nothing', async () => {
+  const { summary, requests, stdout } = await finalize({
+    checkRunId: '987654',
+    publication: { status: 'published', reviewId: 987654 },
+    jobSummary: false,
+  });
+
+  assert.equal(summary, '');
+  assert.doesNotMatch(requests, /\/reviews\//);
+  assert.doesNotMatch(stdout, /::notice::/u);
 });

@@ -197,6 +197,11 @@ export class GitHubCodeReviewApi {
     return this.request(`/repos/${this.repository}/pulls/${number}`);
   }
 
+  /** One published review, by the identifier the CLI's receipt reported. */
+  pullRequestReview(number, reviewId) {
+    return this.request(`/pulls/${number}/reviews/${reviewId}`);
+  }
+
   createCheckRun(payload) {
     return this.request(`/repos/${this.repository}/check-runs`, {
       method: 'POST',

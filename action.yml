@@ -347,18 +347,14 @@ runs:
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: node "$GITHUB_ACTION_PATH/src/publish-failure.mjs"
 
-    # Gated on a review having been requested, and nothing else. It concludes the
-    # check run, writes the terminal status output, and writes the review to the
-    # job summary — and only the first of those needs a check run, which the
-    # script skips when it was never created.
-    #
-    # It used to require the check-run identifier, which meant a caller without
-    # `checks: write` got neither a status output nor a review on its run page:
-    # the one configuration with no check to read was also the one with no
-    # summary to fall back on.
+    # Gated on the check run existing rather than on the review succeeding: this
+    # is what concludes that check, so it has to run for a failed review and has
+    # nothing to conclude before one was created.
     - name: Apply review conclusion
       id: finalize
-      if: always() && steps.request.outputs.requested == 'true'
+      if: >-
+        always() && steps.request.outputs.requested == 'true' &&
+        steps.check.outputs['check-run-id'] != ''
       shell: bash
       env:
         GH_TOKEN: ${{ github.token }}

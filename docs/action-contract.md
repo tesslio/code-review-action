@@ -379,80 +379,9 @@ check run of the same name supersedes the abandoned one.
 
 ## Job summary
 
-Every run that reaches its terminal status writes the review to the workflow
-run's job summary, including a run whose caller does not grant `checks: write`.
-That case matters most: with no check run to read, the summary is the only place
-the review's verdict reaches the run page.
-
-There are two designs for a review and only two: a **markdown** one and a **CLI
-text** one. The job summary is the markdown one, and so is the published
-pull-request review body — the two read as one design in two places. The summary
-therefore mirrors that body's shape: the verdict heading with the count of
-findings requiring changes, the optional-suggestion line when an approving
-review still lists findings, the judgement, the severity table ordered
-worst-first, one flat `#### Findings` list in the outcome's own order, the
-earlier-findings reconciliation, and a link to the published review.
-
-A long review is capped, and the cap prefers what requires changes: an outcome
-whose optional findings come first cannot push the finding that caused the
-verdict out of the list, which would otherwise leave a requested-changes count
-with none of its details on the one surface that stays readable when publication
-fails. What is rendered stays in the outcome's own order, and the count of
-findings not listed is stated.
-
-It deliberately does **not** group findings into must-fix and suggestions, and
-carries no run chips and no lens footer. That grouping is the CLI text design's
-alone; adding it here would make the two markdown surfaces disagree about the
-most important structural choice either makes.
-
-It is written for a run that published nothing, too. That is the case it exists
-for: when publication fails the summary is the only place the completed review
-can still be read.
-
-Only `approved`, `advisory-findings` and `changes-requested` present the review
-as the verdict for the head under check. Every other outcome-bearing terminal
-status — a failed publication, a superseded head, a policy fallback, a gate with
-no boolean verdict, a CLI that never reported what it reviewed, and any status a
-later revision adds — renders the review with the check run's own explanation
-quoted beneath it, so a summary can never contradict the status the check
-reports. The revision on the context line comes only from the outcome, never
-from the head this Action resolved: a CLI that did not say what it reviewed has
-not reviewed that head. A run with no outcome at all writes the status the check
-run reports, plus the CLI's reason when there is a publishable one.
-
-The summary never reports what the run cost. Model-authored text reaching it is
-bounded, because it is untrusted input on a rendered surface: control characters
-and Unicode format characters are removed (bidirectional overrides included, so
-displayed text matches stored order); every line ending — a newline, a lone
-carriage return, and the Unicode line and paragraph separators — is neutralised,
-so no value can start a line and no line can open a block; Markdown delimiters
-are escaped, so nothing model-authored can open a heading, a list, a link, an
-image, emphasis or raw HTML, and a severity cannot open a table column; values
-rendered inside a code span have their backticks removed instead of escaped; and
-every value plus the summary as a whole is length-capped.
-
-Writing the summary is best effort. A failure to write it is a notice; the
-review and the check run are unaffected. A run that could not write one — no
-`GITHUB_STEP_SUMMARY` in its environment — says so, because a review that never
-reached the run page is otherwise indistinguishable from one that did.
-
-### Testing an unreleased revision of this Action
-
-A caller pins this Action by commit SHA, so an unreleased revision is exercised
-by pointing that pin at a branch head. Which workflow file GitHub reads decides
-whether the pin applies at all:
-
-* A **`pull_request`** event reads the workflow file from the pull request's
-  head, so a pull request that changes the pin is reviewed by the revision it
-  pins.
-* A **comment** event — `issue_comment`, `pull_request_review_comment` — reads
-  the workflow file from the **default branch**. A pin that exists only on a
-  branch is invisible to it, and the caller's merged revision runs instead.
-
-So a mention-driven round cannot test a branch revision from a branch. Verified
-on `tesslio/code-review-sandbox#28`: the push-triggered run downloaded the pinned
-branch revision and wrote its summary, while a mention-triggered run on the same
-pull request downloaded the revision pinned on `main` and wrote nothing.
+A run that publishes a review also writes that review to the workflow run's job
+summary, fetched from the review it published so the run page and the pull
+request carry the same text. A run that publishes no review writes nothing.
 
 ## Permissions
 
