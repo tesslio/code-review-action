@@ -456,11 +456,12 @@ export async function writeJobSummary({ summaryPath, log = console, ...rest }) {
   try {
     const body = reviewJobSummary(rest);
     await appendFile(summaryPath, body, 'utf8');
-    // A notice rather than a debug line: `::debug::` is invisible unless a run
-    // has ACTIONS_STEP_DEBUG set, which made the first sandbox run unable to say
-    // whether the write had happened at all. One line, once per run.
+    // Debug rather than notice: a healthy run does not need a line saying the
+    // summary is where the reader is already looking. It is kept because
+    // `ACTIONS_STEP_DEBUG` turns it back on, and the absence of any write is a
+    // notice above, which is the case worth seeing unprompted.
     log.log(
-      `::notice::Wrote ${body.length} characters of review to the job summary (${summaryPath}).`,
+      `::debug::Wrote ${body.length} characters of review to the job summary.`,
     );
     return true;
   } catch (error) {

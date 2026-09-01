@@ -430,7 +430,27 @@ rendered inside a code span have their backticks removed instead of escaped; and
 every value plus the summary as a whole is length-capped.
 
 Writing the summary is best effort. A failure to write it is a notice; the
-review and the check run are unaffected.
+review and the check run are unaffected. A run that could not write one — no
+`GITHUB_STEP_SUMMARY` in its environment — says so, because a review that never
+reached the run page is otherwise indistinguishable from one that did.
+
+### Testing an unreleased revision of this Action
+
+A caller pins this Action by commit SHA, so an unreleased revision is exercised
+by pointing that pin at a branch head. Which workflow file GitHub reads decides
+whether the pin applies at all:
+
+* A **`pull_request`** event reads the workflow file from the pull request's
+  head, so a pull request that changes the pin is reviewed by the revision it
+  pins.
+* A **comment** event — `issue_comment`, `pull_request_review_comment` — reads
+  the workflow file from the **default branch**. A pin that exists only on a
+  branch is invisible to it, and the caller's merged revision runs instead.
+
+So a mention-driven round cannot test a branch revision from a branch. Verified
+on `tesslio/code-review-sandbox#28`: the push-triggered run downloaded the pinned
+branch revision and wrote its summary, while a mention-triggered run on the same
+pull request downloaded the revision pinned on `main` and wrote nothing.
 
 ## Permissions
 

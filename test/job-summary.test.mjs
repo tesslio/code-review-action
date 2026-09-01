@@ -293,7 +293,8 @@ test('the summary is written to the job-summary file, and a missing path is not 
   assert.equal(written, true);
   assert.match(await readFile(summaryPath, 'utf8'), /## Tessl Code Review/u);
   assert.equal(lines.length, 1, 'a successful write reports itself once');
-  assert.match(lines[0], /^::notice::Wrote \d+ characters of review to the job summary/u);
+  // Debug, not notice: visible when a run asks for it, quiet otherwise.
+  assert.match(lines[0], /^::debug::Wrote \d+ characters of review to the job summary/u);
   // An absent path reports itself rather than passing silently.
   const quiet = [];
   const logger = { log: (line) => quiet.push(line) };
