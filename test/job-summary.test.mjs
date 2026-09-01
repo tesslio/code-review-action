@@ -603,3 +603,37 @@ test('a location is displayed exactly as the CLI reported it, tabs and doubled s
   assert.match(summary, /`dir\/a\tb  c\.ts:3`/u, 'the path is not rewritten');
   assert.match(summary, /Two  spaces and a\ttab in the title/u);
 });
+
+test('a judgement keeps its paragraph boundaries, however they are encoded', () => {
+  for (const [ending, label] of [
+    ['\n\n', 'LF LF'],
+    ['\r\n\r\n', 'CRLF CRLF'],
+    ['\r\r', 'CR CR'],
+    ['\u2029', 'paragraph separator'],
+  ]) {
+    const summary = summaryFor({
+      outcome: {
+        ...result().outcome,
+        judgement: `First paragraph.${ending}Second paragraph.`,
+      },
+    });
+
+    assert.match(
+      summary,
+      /First paragraph\.\n\nSecond paragraph\./u,
+      `${label} must separate two paragraphs`,
+    );
+  }
+});
+
+test('a single line ending inside a paragraph stays a single break', () => {
+  const summary = summaryFor({
+    outcome: {
+      ...result().outcome,
+      judgement: 'One line.\r\nStill the same paragraph.',
+    },
+  });
+
+  assert.match(summary, /One line\.\nStill the same paragraph\./u);
+  assert.doesNotMatch(summary, /One line\.\n\nStill/u);
+});

@@ -71,6 +71,19 @@ const INLINE_MARKDOWN = /[\\`*_[\]<>|~]/gu;
  */
 const LINE_ENDINGS = /[\r\n\u2028\u2029]+/gu;
 
+/**
+ * The alternate encodings of a *single* line ending, for text whose paragraph
+ * structure is kept.
+ *
+ * Deliberately not a run: collapsing runs would turn a blank line — the only
+ * thing that separates two Markdown paragraphs — into a soft break, merging
+ * rationale the model stated separately. `\r\n` is one ending and matches as
+ * one; `U+2029` is a paragraph separator and becomes a blank line rather than a
+ * single break.
+ */
+const SINGLE_LINE_ENDING = /\r\n|[\r\u2028]/gu;
+const PARAGRAPH_SEPARATOR = /\u2029/gu;
+
 /** Block openers, escaped only where they would start a block: at line start. */
 const BLOCK_OPENER = /^(\s*)([#>+=-])/u;
 const ORDERED_MARKER = /^(\s*)(\d{1,9})([.)])/u;
@@ -151,9 +164,11 @@ function codeText(value, limit) {
  * state a verdict this summary never reached.
  */
 function paragraphs(value, limit) {
-  const escaped = escapeInline(
-    stripped(value).replaceAll(LINE_ENDINGS, '\n').trim(),
-  )
+  const normalised = stripped(value)
+    .replaceAll(PARAGRAPH_SEPARATOR, '\n\n')
+    .replaceAll(SINGLE_LINE_ENDING, '\n')
+    .trim();
+  const escaped = escapeInline(normalised)
     .split('\n')
     .map((line) =>
       line.replace(BLOCK_OPENER, '$1\\$2').replace(ORDERED_MARKER, '$1$2\\$3'),
