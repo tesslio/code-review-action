@@ -380,7 +380,9 @@ check run of the same name supersedes the abandoned one.
 ## Job summary
 
 Every run that reaches its terminal status writes the review to the workflow
-run's job summary.
+run's job summary, including a run whose caller does not grant `checks: write`.
+That case matters most: with no check run to read, the summary is the only place
+the review's verdict reaches the run page.
 
 There are two designs for a review and only two: a **markdown** one and a **CLI
 text** one. The job summary is the markdown one, and so is the published

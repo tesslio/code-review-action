@@ -27,25 +27,6 @@ jobs:
       - name: Validate repository foundations
         run: bash scripts/validate-foundation.sh
 
-  job-summary-preview:
-    name: job-summary-preview
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      # The job summary is a rendering, and a rendering is reviewed by looking at
-      # it. Unit tests assert that particular strings appear; they cannot say
-      # whether the result reads well. This writes every state the renderer can
-      # produce into this run's own job summary, so what is under review is
-      # visible on the run page rather than only in assertions.
-      #
-      # Fixtures only: no network, no model spend, nothing published.
-      - name: Render every job-summary state into this run's summary
-        run: node scripts/render-job-summary-preview.mjs
-
   actionlint:
     name: actionlint
     runs-on: ubuntu-latest
