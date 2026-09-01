@@ -456,10 +456,11 @@ export async function writeJobSummary({ summaryPath, log = console, ...rest }) {
   try {
     const body = reviewJobSummary(rest);
     await appendFile(summaryPath, body, 'utf8');
-    // Says where it went and how much, so a run log can distinguish a written
-    // summary from a skipped one without reading the summary itself.
+    // A notice rather than a debug line: `::debug::` is invisible unless a run
+    // has ACTIONS_STEP_DEBUG set, which made the first sandbox run unable to say
+    // whether the write had happened at all. One line, once per run.
     log.log(
-      `::debug::Wrote ${body.length} characters of review to the job summary.`,
+      `::notice::Wrote ${body.length} characters of review to the job summary (${summaryPath}).`,
     );
     return true;
   } catch (error) {

@@ -277,9 +277,11 @@ test('a review longer than the listed limit reports how many it did not list', (
 test('the summary is written to the job-summary file, and a missing path is not an error', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tessl-job-summary-'));
   const summaryPath = join(directory, 'summary.md');
+  const lines = [];
 
   const written = await writeJobSummary({
     summaryPath,
+    log: { log: (line) => lines.push(line) },
     result: result(),
     mode: 'advisory',
     status: 'advisory-findings',
@@ -290,6 +292,8 @@ test('the summary is written to the job-summary file, and a missing path is not 
 
   assert.equal(written, true);
   assert.match(await readFile(summaryPath, 'utf8'), /## Tessl Code Review/u);
+  assert.equal(lines.length, 1, 'a successful write reports itself once');
+  assert.match(lines[0], /^::notice::Wrote \d+ characters of review to the job summary/u);
   // An absent path reports itself rather than passing silently.
   const quiet = [];
   const logger = { log: (line) => quiet.push(line) };
