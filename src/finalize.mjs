@@ -12,6 +12,7 @@ import { publishApprovalRefusalNotice } from './approval-refusal-notice.mjs';
 import { removeFailureNotices } from './failure-notice.mjs';
 import { configurationFailureReason } from './failure-reason.mjs';
 import { GitHubCodeReviewApi } from './github-api.mjs';
+import { writeJobSummary } from './job-summary.mjs';
 import { ResultFileError, readReviewResult } from './result-file.mjs';
 
 const mode = requiredEnv('MODE');
@@ -86,6 +87,9 @@ async function answerRefusedApprovalRequest() {
 }
 
 let conclusion;
+// Kept outside the try so the summary can render the review even when the run
+// that produced it went on to fail.
+let reviewResult;
 // The CLI's own reason for stopping, when it left one this Action publishes.
 // Read from the same result the conclusion is computed from, so the check
 // cannot report a reason for a run it concluded from something else.
@@ -99,6 +103,7 @@ try {
     resultPath === undefined || resultPath === ''
       ? undefined
       : await readReviewResult(resultPath);
+  reviewResult = result;
   conclusion = reviewConclusion({
     mode,
     reviewExitCode: process.env.REVIEW_EXIT_CODE,
@@ -135,6 +140,33 @@ if (COMPLETED_REVIEW_STATUSES.has(conclusion.status)) {
 if (conclusion.status === 'refused-approval-request') {
   await answerRefusedApprovalRequest();
 }
+
+/**
+ * Write the review to the run's job summary.
+ *
+ * Here rather than in its own step because this is where the result, the mode,
+ * the reviewed head and the terminal status are already resolved together — and
+ * the summary has to describe the same status the check run concludes with.
+ *
+ * Best effort, like everything else published from here. It runs for a failed
+ * run too: when publication fails, the summary is the only place the completed
+ * review can still be read.
+ */
+async function writeReviewJobSummary(result, status, reason) {
+  await writeJobSummary({
+    summaryPath: process.env.GITHUB_STEP_SUMMARY,
+    result,
+    mode,
+    status,
+    reason,
+    headSha: process.env.HEAD_SHA,
+    runUrl: process.env.RUN_URL,
+    repository: process.env.REPOSITORY,
+    prNumber: process.env.PR_NUMBER,
+  });
+}
+
+await writeReviewJobSummary(reviewResult, conclusion.status, failureReason);
 
 // The check run carries the computed status even when the step output cannot
 // be written, and that write still fails the step afterwards.

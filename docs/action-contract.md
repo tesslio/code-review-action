@@ -377,6 +377,31 @@ A run that is killed before it finalizes, by a job timeout or a lost runner,
 leaves the check run `in_progress`. Re-run the workflow to replace it: a later
 check run of the same name supersedes the abandoned one.
 
+## Job summary
+
+Every run that reaches its terminal status writes the review to the workflow
+run's job summary. It carries the same review the pull request does, rendered
+from the same result document: the verdict heading with the count of findings
+requiring changes, the mode, the lens count, the duration and the reviewed head,
+the judgement, the severity table ordered worst-first, the findings grouped into
+must-fix and suggestions, the earlier-findings reconciliation, the lens set, and
+a link to the published review.
+
+It is written for a run that published nothing, too. That is the case it exists
+for: when publication fails the summary is the only place the completed review
+can still be read, and the terminal status is quoted beneath it so the review is
+not mistaken for one that reached the pull request. A run with no outcome at all
+writes the status the check run reports, plus the CLI's reason when there is a
+publishable one.
+
+The summary never reports what the run cost. Model-authored text reaching it is
+bounded — control characters removed, judgement and titles length-capped, the
+whole summary capped well inside GitHub's limit — because it is untrusted input
+on a rendered surface.
+
+Writing the summary is best effort. A failure to write it is a notice; the
+review and the check run are unaffected.
+
 ## Permissions
 
 These are the workflow token's permissions. An identity supplied as
