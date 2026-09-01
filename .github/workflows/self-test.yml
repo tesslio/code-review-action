@@ -1,0 +1,68 @@
+name: Self-test
+
+# Runs the Action *from this pull request's own code* against this pull request,
+# so a change to the Action can be exercised end to end before it is released.
+#
+# Label-gated rather than automatic, and deliberately so: a run spends model
+# credit and publishes a review to the pull request. Add the `self-test` label
+# when you want it; remove and re-add the label to run it again.
+#
+# Why a label and not `workflow_dispatch`: GitHub only offers a dispatch for
+# workflows present on the default branch, so a dispatch-only workflow added in a
+# pull request cannot be triggered. A `pull_request` event uses the workflow file
+# from the pull request's head, which is exactly the code under test.
+on:
+  pull_request:
+    types: [labeled]
+
+# The minimum the Action needs: read the head to review it, report its check on
+# that head, publish the review, and post or clear a failure notice.
+permissions:
+  contents: read
+  checks: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: self-test-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: review this pull request with this pull request's Action
+    if: github.event.label.name == 'self-test'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # `uses: ./` needs the Action's own code on disk. The Action checks out the
+      # reviewed head itself, into `.tessl-code-review/workspace`, so this
+      # checkout of the Action repository does not collide with it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The point of the whole workflow: `./` is this branch's Action, not the
+      # released `@v1` the repository's own review workflow uses. Advisory rather
+      # than gate, because a self-test must not be able to block the pull request
+      # it is testing.
+      - uses: ./
+        with:
+          tessl-token: ${{ secrets.TESSL_TOKEN }}
+          github-token: ${{ github.token }}
+          profile: standard
+          mode: advisory
+          lenses: >-
+            ["tessl/code-review@0.1.0#review-correctness-and-data-integrity","tessl/code-review@0.1.0#review-security-and-privacy"]
+
+      # The run page is where the change under test is visible, so say so rather
+      # than leaving a reader to find it.
+      - name: Point at the job summary
+        if: always()
+        run: |
+          {
+            echo '## Self-test'
+            echo
+            echo 'The review above was produced by this pull request'"'"'s Action code,'
+            echo 'not by the released `@v1`. Everything below the Tessl Code Review'
+            echo 'heading is what a caller will see on their own run page.'
+          } >> "$GITHUB_STEP_SUMMARY"
