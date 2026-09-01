@@ -290,8 +290,15 @@ test('the summary is written to the job-summary file, and a missing path is not 
 
   assert.equal(written, true);
   assert.match(await readFile(summaryPath, 'utf8'), /## Tessl Code Review/u);
-  assert.equal(await writeJobSummary({ summaryPath: '' }), false);
-  assert.equal(await writeJobSummary({}), false);
+  // An absent path reports itself rather than passing silently.
+  const quiet = [];
+  const logger = { log: (line) => quiet.push(line) };
+  assert.equal(await writeJobSummary({ summaryPath: '', log: logger }), false);
+  assert.equal(await writeJobSummary({ log: logger }), false);
+  assert.equal(quiet.length, 2);
+  for (const line of quiet) {
+    assert.match(line, /^::notice::The review was not written to the job summary/u);
+  }
 });
 
 test('a write failure is a notice, not a throw', async () => {

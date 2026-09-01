@@ -147,7 +147,7 @@ test('finalize writes the status when the CLI produced no result at all', async 
   assert.doesNotMatch(summary, /#### Findings/u);
 });
 
-test('a missing GITHUB_STEP_SUMMARY is not an error', async () => {
+test('a missing GITHUB_STEP_SUMMARY is not an error, and says so', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tessl-finalize-'));
   const resultPath = join(directory, 'result.json');
   const outputPath = join(directory, 'output.txt');
@@ -171,6 +171,11 @@ test('a missing GITHUB_STEP_SUMMARY is not an error', async () => {
     },
   });
 
-  assert.doesNotMatch(stdout, /::notice::/u);
+  // Not an error — the review is done either way — but not silent either: a
+  // review that never reached the run page is the one failure worth naming.
+  assert.match(
+    stdout,
+    /^::notice::The review was not written to the job summary: GITHUB_STEP_SUMMARY is not set/mu,
+  );
   assert.match(await readFile(outputPath, 'utf8'), /^status=advisory-findings$/mu);
 });

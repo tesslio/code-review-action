@@ -443,9 +443,24 @@ export function reviewJobSummary({
  * anything was written.
  */
 export async function writeJobSummary({ summaryPath, log = console, ...rest }) {
-  if (typeof summaryPath !== 'string' || summaryPath === '') return false;
+  // An absent path is reported rather than passed over. A summary that was never
+  // written and a summary written successfully are otherwise indistinguishable
+  // in a run log, which makes the one failure that matters — the review not
+  // reaching the run page — the only one nobody can see.
+  if (typeof summaryPath !== 'string' || summaryPath === '') {
+    log.log(
+      '::notice::The review was not written to the job summary: GITHUB_STEP_SUMMARY is not set for this step. The review itself is unaffected.',
+    );
+    return false;
+  }
   try {
-    await appendFile(summaryPath, reviewJobSummary(rest), 'utf8');
+    const body = reviewJobSummary(rest);
+    await appendFile(summaryPath, body, 'utf8');
+    // Says where it went and how much, so a run log can distinguish a written
+    // summary from a skipped one without reading the summary itself.
+    log.log(
+      `::debug::Wrote ${body.length} characters of review to the job summary.`,
+    );
     return true;
   } catch (error) {
     log.log(
