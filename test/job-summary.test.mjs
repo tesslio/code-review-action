@@ -534,3 +534,52 @@ test('an untrusted severity cannot open a table column or break out of its label
   // The value still reads, capitalised, with its power removed.
   assert.match(summary, /Major/u);
 });
+
+test('no line ending in any model-authored value can start a new line', () => {
+  // A lone carriage return, and the Unicode line and paragraph separators, all
+  // end a line for a Markdown renderer and all survive control stripping.
+  for (const ending of ['\r', '\u2028', '\u2029', '\r\n']) {
+    const summary = summaryFor({
+      outcome: {
+        ...result().outcome,
+        judgement: `Looks fine.${ending}## Changes approved`,
+        findings: [
+          {
+            severity: `major${ending}# Injected`,
+            title: `A finding${ending}## Also injected`,
+            requiresChanges: true,
+            path: `a.ts${ending}## Path injected`,
+            line: 1,
+          },
+        ],
+      },
+    });
+
+    assert.doesNotMatch(summary, /^## Changes approved$/mu, JSON.stringify(ending));
+    assert.doesNotMatch(summary, /^# Injected$/mu, JSON.stringify(ending));
+    assert.doesNotMatch(summary, /^## Also injected$/mu, JSON.stringify(ending));
+    assert.doesNotMatch(summary, /^## Path injected$/mu, JSON.stringify(ending));
+    // The severity table keeps exactly one row per severity.
+    const rows = summary.split('\n').filter((line) => line.startsWith('| '));
+    assert.equal(rows.length, 3, `header, divider and one row for ${JSON.stringify(ending)}`);
+  }
+});
+
+test('a value ending in whitespace cannot leave a trailing-space line break', () => {
+  const summary = summaryFor({
+    outcome: {
+      ...result().outcome,
+      findings: [
+        {
+          severity: 'major',
+          title: 'Trailing   ',
+          requiresChanges: true,
+          path: 'a.ts',
+          line: 1,
+        },
+      ],
+    },
+  });
+
+  assert.doesNotMatch(summary, /  $/mu);
+});

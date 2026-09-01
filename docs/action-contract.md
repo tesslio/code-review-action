@@ -421,10 +421,13 @@ run reports, plus the CLI's reason when there is a publishable one.
 The summary never reports what the run cost. Model-authored text reaching it is
 bounded, because it is untrusted input on a rendered surface: control characters
 and Unicode format characters are removed (bidirectional overrides included, so
-displayed text matches stored order), Markdown delimiters are escaped so nothing
-model-authored can open a heading, a list, a link, an image or raw HTML, values
-rendered inside a code span have their backticks removed, and every value plus
-the summary as a whole is length-capped.
+displayed text matches stored order); every line ending — a newline, a lone
+carriage return, and the Unicode line and paragraph separators — is neutralised,
+so no value can start a line and no line can open a block; Markdown delimiters
+are escaped, so nothing model-authored can open a heading, a list, a link, an
+image, emphasis or raw HTML, and a severity cannot open a table column; values
+rendered inside a code span have their backticks removed instead of escaped; and
+every value plus the summary as a whole is length-capped.
 
 Writing the summary is best effort. A failure to write it is a notice; the
 review and the check run are unaffected.

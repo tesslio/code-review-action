@@ -60,6 +60,17 @@ const STRIPPED_CHARACTERS = /[\p{Cf}\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F
  */
 const INLINE_MARKDOWN = /[\\`*_[\]<>|~]/gu;
 
+/**
+ * Every character a Markdown renderer treats as ending a line.
+ *
+ * `\n` is the obvious one, but a lone `\r` ends a line too, and `\u2028` /
+ * `\u2029` are line and paragraph separators that survive control-character
+ * stripping because they are separators rather than controls. All of them have
+ * to be handled in one place: a value that reaches a rendered surface with any
+ * of them intact can start a new line, and a new line can open a heading.
+ */
+const LINE_ENDINGS = /[\r\n\u2028\u2029]/gu;
+
 /** Block openers, escaped only where they would start a block: at line start. */
 const BLOCK_OPENER = /^(\s*)([#>+=-])/u;
 const ORDERED_MARKER = /^(\s*)(\d{1,9})([.)])/u;
@@ -96,15 +107,27 @@ function escapeInline(value) {
 }
 
 /**
+ * A model-authored value flattened to one line: stripped, every line ending
+ * turned into a space, and whitespace runs squeezed.
+ *
+ * The squeeze matters as much as the replacement — a line ending surrounded by
+ * spaces would otherwise leave a run of them where the break was, and two
+ * trailing spaces are themselves a Markdown line break.
+ */
+function oneLine(value) {
+  return stripped(value)
+    .replaceAll(LINE_ENDINGS, ' ')
+    .replaceAll(/\s+/gu, ' ')
+    .trim();
+}
+
+/**
  * Model-authored text rendered as one line of prose: stripped, collapsed onto a
  * single line so it cannot break out of the list item that holds it, escaped so
  * every Markdown delimiter in it is literal, then capped.
  */
 function text(value, limit) {
-  const collapsed = stripped(value)
-    .replaceAll(/\s*\n\s*/gu, ' ')
-    .trim();
-  return capped(escapeInline(collapsed), limit);
+  return capped(escapeInline(oneLine(value)), limit);
 }
 
 /**
@@ -116,11 +139,7 @@ function text(value, limit) {
  * the span, and it has no business in a path or a severity.
  */
 function codeText(value, limit) {
-  const collapsed = stripped(value)
-    .replaceAll(/\s*\n\s*/gu, ' ')
-    .replaceAll('`', '')
-    .trim();
-  return capped(collapsed, limit);
+  return capped(oneLine(value).replaceAll('`', ''), limit);
 }
 
 /**
@@ -131,7 +150,9 @@ function codeText(value, limit) {
  * state a verdict this summary never reached.
  */
 function paragraphs(value, limit) {
-  const escaped = escapeInline(stripped(value).trim())
+  const escaped = escapeInline(
+    stripped(value).replaceAll(LINE_ENDINGS, '\n').trim(),
+  )
     .split('\n')
     .map((line) =>
       line.replace(BLOCK_OPENER, '$1\\$2').replace(ORDERED_MARKER, '$1$2\\$3'),
@@ -153,9 +174,7 @@ function paragraphs(value, limit) {
  * its first letter capitalised rather than a backslash.
  */
 function severityLabel(severity) {
-  const cleaned = stripped(severity)
-    .replaceAll(/\s*\n\s*/gu, ' ')
-    .trim();
+  const cleaned = oneLine(severity);
   if (cleaned === '') return 'Unknown';
   const titled = `${cleaned[0].toUpperCase()}${cleaned.slice(1)}`;
   return capped(escapeInline(titled), 40);
