@@ -161,15 +161,39 @@ function severityIndex(severity) {
 }
 
 /**
+ * Which findings the capped list renders, when there are more than it will show.
+ *
+ * The cap cannot be a plain prefix. A valid outcome can carry fifty optional
+ * findings followed by a blocking one, and a prefix would then print a
+ * requested-changes count with none of the details of the finding that caused it
+ * — on the one surface that is the readable review when publication fails.
+ *
+ * So selection prefers what requires changes, and the selected set is then
+ * rendered in the outcome's own order, which is the presentation this surface
+ * documents. With more blocking findings than the cap, even those are capped;
+ * the caller reports how many were not listed either way.
+ */
+function selectListedFindings(findings) {
+  if (findings.length <= LISTED_FINDINGS_LIMIT) return findings;
+  const blocking = findings.filter((finding) => finding?.requiresChanges === true);
+  const optional = findings.filter((finding) => finding?.requiresChanges !== true);
+  const listedBlocking = blocking.slice(0, LISTED_FINDINGS_LIMIT);
+  const room = Math.max(0, LISTED_FINDINGS_LIMIT - listedBlocking.length);
+  const selected = new Set([...listedBlocking, ...optional.slice(0, room)]);
+  return findings.filter((finding) => selected.has(finding));
+}
+
+/**
  * The findings, as the published body lists them: one flat list, in the
  * outcome's own order.
  *
  * Not sorted here. The body lists what it placed inline followed by what
  * continues on an earlier thread, both in outcome order, and a different order
- * on this surface would be a second design rather than the same one.
+ * on this surface would be a second design rather than the same one. Which
+ * findings survive a cap is a separate question — see above.
  */
 function renderFindingList(findings) {
-  const listed = findings.slice(0, LISTED_FINDINGS_LIMIT);
+  const listed = selectListedFindings(findings);
   const lines = listed.map((finding) => {
     const location = findingLocation(finding);
     const suffix = location === '' ? '' : `\n  \`${location}\``;

@@ -437,3 +437,63 @@ test('a backtick in a path cannot close the code span that holds it', () => {
 
   assert.match(summary, /`a\.ts:1`/u);
 });
+
+test('the cap never hides a blocking finding, whatever the outcome order', () => {
+  const findings = [
+    ...Array.from({ length: 50 }, (_unused, index) => ({
+      severity: 'minor',
+      title: `Optional ${index}`,
+      requiresChanges: false,
+      path: 'a.ts',
+      line: index + 1,
+    })),
+    {
+      severity: 'critical',
+      title: 'The one that blocks',
+      requiresChanges: true,
+      path: 'blocking.ts',
+      line: 7,
+    },
+  ];
+  const summary = summaryFor({ outcome: { ...result().outcome, findings } });
+
+  assert.match(summary, /^### Changes requested \(1\)$/mu);
+  // The finding that caused the verdict is listed, with its location.
+  assert.match(summary, /The one that blocks/u);
+  assert.match(summary, /`blocking\.ts:7`/u);
+  assert.match(summary, /^- _and 1 more\._$/mu);
+});
+
+test('the selected findings still render in the outcome order', () => {
+  const findings = [
+    { severity: 'minor', title: 'First optional', requiresChanges: false, path: 'a.ts', line: 1 },
+    { severity: 'critical', title: 'Blocking one', requiresChanges: true, path: 'b.ts', line: 2 },
+    ...Array.from({ length: 60 }, (_unused, index) => ({
+      severity: 'nit',
+      title: `Filler ${index}`,
+      requiresChanges: false,
+      path: 'c.ts',
+      line: index + 1,
+    })),
+  ];
+  const summary = summaryFor({ outcome: { ...result().outcome, findings } });
+
+  assert.ok(
+    summary.indexOf('First optional') < summary.indexOf('Blocking one'),
+    'outcome order is preserved among the findings that are rendered',
+  );
+});
+
+test('more blocking findings than the cap are capped too, and counted', () => {
+  const findings = Array.from({ length: 60 }, (_unused, index) => ({
+    severity: 'major',
+    title: `Blocking ${index}`,
+    requiresChanges: true,
+    path: 'a.ts',
+    line: index + 1,
+  }));
+  const summary = summaryFor({ outcome: { ...result().outcome, findings } });
+
+  assert.match(summary, /^### Changes requested \(60\)$/mu);
+  assert.match(summary, /^- _and 10 more\._$/mu);
+});

@@ -391,6 +391,13 @@ review still lists findings, the judgement, the severity table ordered
 worst-first, one flat `#### Findings` list in the outcome's own order, the
 earlier-findings reconciliation, and a link to the published review.
 
+A long review is capped, and the cap prefers what requires changes: an outcome
+whose optional findings come first cannot push the finding that caused the
+verdict out of the list, which would otherwise leave a requested-changes count
+with none of its details on the one surface that stays readable when publication
+fails. What is rendered stays in the outcome's own order, and the count of
+findings not listed is stated.
+
 It deliberately does **not** group findings into must-fix and suggestions, and
 carries no run chips and no lens footer. That grouping is the CLI text design's
 alone; adding it here would make the two markdown surfaces disagree about the
