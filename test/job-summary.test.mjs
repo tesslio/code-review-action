@@ -67,20 +67,25 @@ function summaryFor(overrides = {}, options = {}) {
   });
 }
 
-test('a reviewed run renders the verdict, the judgement and both finding groups', () => {
+test('a reviewed run renders the verdict, the judgement and one flat findings list', () => {
   const summary = summaryFor();
 
   assert.match(summary, /^## Tessl Code Review$/mu);
   assert.match(summary, /^### Changes requested \(2\)$/mu);
   assert.match(summary, /The workflow misroutes inline review-comment requests\./u);
-  assert.match(summary, /^#### Must fix$/mu);
-  assert.match(summary, /^#### Suggestions \(1\)$/mu);
-  // Grouped by requiresChanges, not by severity: the minor suggestion must not
-  // appear above the major finding that blocks.
-  assert.ok(summary.indexOf('#### Must fix') < summary.indexOf('#### Suggestions'));
+  assert.match(summary, /^#### Findings$/mu);
+});
+
+test('the markdown design does not group findings — that is the CLI design alone', () => {
+  const summary = summaryFor();
+
+  assert.doesNotMatch(summary, /Must fix/iu);
+  assert.doesNotMatch(summary, /Suggestions/iu);
+  // Findings keep the outcome's own order, as the published body lists them.
   assert.ok(
-    summary.indexOf('Inline comments have no pull-request identifier') <
-      summary.indexOf('Test placement guidance'),
+    summary.indexOf('Test placement guidance') <
+      summary.indexOf('Fork-controlled review instructions'),
+    'the flat list follows outcome order, not severity',
   );
 });
 
@@ -100,18 +105,20 @@ test('a finding location is read from either the flat or the nested form', () =>
   assert.match(summary, /`\.github\/workflows\/tessl-code-review\.yml:31`/u);
 });
 
-test('the context line carries the mode, lens count, duration and reviewed head — and never a cost', () => {
+test('no run chips, no lens footer — the body carries neither, so nor does this', () => {
   const summary = summaryFor();
 
-  assert.match(summary, /advisory · 2 lenses · 2m 10s · `714940a`/u);
-  assert.ok(!summary.includes('$'), 'the summary must not contain a cost');
-  assert.doesNotMatch(summary, /cost/iu);
+  assert.doesNotMatch(summary, /advisory/u);
+  assert.doesNotMatch(summary, /714940a/u);
+  assert.doesNotMatch(summary, /^Lenses:/mu);
+  assert.doesNotMatch(summary, /2m 10s/u);
 });
 
-test('lenses are named the way the published review names them', () => {
+test('no cost, anywhere', () => {
   const summary = summaryFor();
 
-  assert.match(summary, /^Lenses: Security And Privacy · Heavy Invariants$/mu);
+  assert.ok(!summary.includes('$'), 'the summary must not contain a cost');
+  assert.doesNotMatch(summary, /cost/iu);
 });
 
 test('a published review is linked, addressed by its review id', () => {
@@ -158,7 +165,7 @@ test('an approving review with suggestions says nothing is blocking', () => {
 
   assert.match(summary, /^### Changes approved$/mu);
   assert.match(summary, /^1 optional suggestion\. Nothing blocking\.$/mu);
-  assert.doesNotMatch(summary, /#### Must fix/u);
+  assert.match(summary, /^#### Findings$/mu);
 });
 
 test('earlier findings are summarised the way the published review summarises them', () => {
@@ -197,7 +204,7 @@ test('a run with no outcome renders the status the check run reports, and the CL
   assert.match(summary, /^### Review did not complete$/mu);
   assert.match(summary, /The Tessl CLI reported: `Lens ref .* does not resolve\.`/u);
   assert.match(summary, /\[View the workflow run\]/u);
-  assert.doesNotMatch(summary, /#### Must fix/u);
+  assert.doesNotMatch(summary, /#### Findings/u);
 });
 
 test('a run refused for no matching lenses says exactly that', () => {

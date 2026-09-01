@@ -380,12 +380,21 @@ check run of the same name supersedes the abandoned one.
 ## Job summary
 
 Every run that reaches its terminal status writes the review to the workflow
-run's job summary. It carries the same review the pull request does, rendered
-from the same result document: the verdict heading with the count of findings
-requiring changes, the mode, the lens count, the duration and the reviewed head,
-the judgement, the severity table ordered worst-first, the findings grouped into
-must-fix and suggestions, the earlier-findings reconciliation, the lens set, and
-a link to the published review.
+run's job summary.
+
+There are two designs for a review and only two: a **markdown** one and a **CLI
+text** one. The job summary is the markdown one, and so is the published
+pull-request review body — the two read as one design in two places. The summary
+therefore mirrors that body's shape: the verdict heading with the count of
+findings requiring changes, the optional-suggestion line when an approving
+review still lists findings, the judgement, the severity table ordered
+worst-first, one flat `#### Findings` list in the outcome's own order, the
+earlier-findings reconciliation, and a link to the published review.
+
+It deliberately does **not** group findings into must-fix and suggestions, and
+carries no run chips and no lens footer. That grouping is the CLI text design's
+alone; adding it here would make the two markdown surfaces disagree about the
+most important structural choice either makes.
 
 It is written for a run that published nothing, too. That is the case it exists
 for: when publication fails the summary is the only place the completed review

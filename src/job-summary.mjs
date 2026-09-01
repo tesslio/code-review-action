@@ -3,9 +3,19 @@
  *
  * The run page says nothing about a review today: the CLI's human output goes
  * into the result file behind `--json`, the findings are not annotations, and
- * the only machine-readable artifact is a zip. This renders the same review the
- * pull request carries, from the same result document, so a reader sees one
- * review in two places rather than two summaries of it.
+ * the only machine-readable artifact is a zip.
+ *
+ * There are two designs for a review and only two: a **markdown** one and a
+ * **CLI text** one. This is the markdown one, and so is the published
+ * pull-request review body — the two must read as one design in two places, so
+ * this mirrors that body's shape deliberately: the same verdict heading, the
+ * same optional-suggestion line, the judgement, the severity table ordered
+ * worst-first, and one flat `#### Findings` list.
+ *
+ * In particular it does **not** group findings into must-fix and suggestions.
+ * That grouping belongs to the CLI text design alone. Copying it here would
+ * make the two markdown surfaces disagree about the most important structural
+ * choice either of them makes.
  *
  * It is written for every terminal status, including the ones that published
  * nothing. That failure case is what justifies the summary existing: when
@@ -137,25 +147,6 @@ function severityLabel(severity) {
     : `${cleaned[0].toUpperCase()}${cleaned.slice(1)}`;
 }
 
-/**
- * A lens ref as a reader should see it: the leaf skill name, de-hyphenated.
- * Mirrors how the published review names a lens, so the two agree.
- */
-function lensLabel(ref) {
-  const selected = String(ref).split('#').at(-1) ?? '';
-  const segments = selected.split('/').filter(Boolean);
-  const leaf =
-    segments.at(-1) === 'SKILL.md' ? segments.at(-2) : segments.at(-1);
-  const words = String(leaf ?? '')
-    .replace(/^review-/u, '')
-    .split('-')
-    .filter(Boolean);
-  if (words.length === 0) return text(ref, 80);
-  return words
-    .map((word) => `${word[0].toUpperCase()}${word.slice(1)}`)
-    .join(' ');
-}
-
 /** A finding carries its location nested or flat, and both forms are published. */
 function findingLocation(finding) {
   const path = finding?.path ?? finding?.location?.path;
@@ -169,20 +160,16 @@ function severityIndex(severity) {
   return index === -1 ? SEVERITY_RANK.length : index;
 }
 
-/** Worst severity first; findings of one severity keep the outcome's order. */
-function bySeverity(findings) {
-  return findings
-    .map((finding, index) => ({ finding, index }))
-    .sort(
-      (a, b) =>
-        severityIndex(a.finding?.severity) -
-          severityIndex(b.finding?.severity) || a.index - b.index,
-    )
-    .map((entry) => entry.finding);
-}
-
+/**
+ * The findings, as the published body lists them: one flat list, in the
+ * outcome's own order.
+ *
+ * Not sorted here. The body lists what it placed inline followed by what
+ * continues on an earlier thread, both in outcome order, and a different order
+ * on this surface would be a second design rather than the same one.
+ */
 function renderFindingList(findings) {
-  const listed = bySeverity(findings).slice(0, LISTED_FINDINGS_LIMIT);
+  const listed = findings.slice(0, LISTED_FINDINGS_LIMIT);
   const lines = listed.map((finding) => {
     const location = findingLocation(finding);
     const suffix = location === '' ? '' : `\n  \`${location}\``;
@@ -225,58 +212,6 @@ function renderEarlierFindings(reconciliation) {
     RECONCILIATION_PROSE[category](count),
   );
   return ['', `**Earlier findings:** ${parts.join(' · ')}`];
-}
-
-export function formatDuration(durationMs) {
-  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return minutes === 0
-    ? `${seconds}s`
-    : `${minutes}m ${String(seconds).padStart(2, '0')}s`;
-}
-
-/**
- * The run's facts, as one line. Never a cost.
- *
- * The revision comes only from the outcome, never from the head this Action
- * resolved: a CLI that did not report what it reviewed has not reviewed the
- * Action's head, and printing it here would assert that it had.
- */
-function renderContext({ result, mode }) {
-  const lenses = result?.outcome?.lenses;
-  const durationMs = result?.diagnostics?.durationMs;
-  const reviewedHead = result?.outcome?.subject?.change?.headRevision;
-  const parts = [mode];
-  if (Array.isArray(lenses)) {
-    parts.push(`${lenses.length} ${lenses.length === 1 ? 'lens' : 'lenses'}`);
-  }
-  if (typeof durationMs === 'number' && Number.isFinite(durationMs)) {
-    parts.push(formatDuration(durationMs));
-  }
-  if (
-    typeof reviewedHead === 'string' &&
-    /^[0-9a-f]{7,40}$/iu.test(reviewedHead)
-  ) {
-    parts.push(`\`${reviewedHead.slice(0, 7)}\``);
-  }
-  const line = parts.filter((part) => typeof part === 'string' && part !== '');
-  return line.length === 0 ? [] : ['', line.join(' · ')];
-}
-
-function renderLensSet(result) {
-  const lenses = result?.outcome?.lenses;
-  if (!Array.isArray(lenses) || lenses.length === 0) return [];
-  const labels = [
-    ...new Set(
-      lenses
-        .map((lens) =>
-          typeof lens?.ref === 'string' ? lensLabel(lens.ref) : '',
-        )
-        .filter((label) => label !== ''),
-    ),
-  ];
-  return labels.length === 0 ? [] : ['', `Lenses: ${labels.join(' · ')}`];
 }
 
 /**
@@ -325,47 +260,37 @@ const VERDICT_STANDS_STATUSES = new Set([
  * `requiresChanges` — rather than by severity, so the summary groups them the
  * way the product decided them.
  */
-function renderReviewedSummary({ result, mode, repository, prNumber }) {
+function renderReviewedSummary({ result, repository, prNumber }) {
   const outcome = result.outcome;
   const findings = Array.isArray(outcome.findings) ? outcome.findings : [];
-  const mustFix = findings.filter(
+  const requiresChangesCount = findings.filter(
     (finding) => finding?.requiresChanges === true,
-  );
-  const suggestions = findings.filter(
-    (finding) => finding?.requiresChanges !== true,
-  );
+  ).length;
+  const optionalCount = findings.length - requiresChangesCount;
   const heading =
     outcome.approved === true
       ? '### Changes approved'
-      : `### Changes requested (${mustFix.length})`;
+      : `### Changes requested (${requiresChangesCount})`;
   const judgement = paragraphs(outcome.judgement, JUDGEMENT_LIMIT);
 
   return [
     '## Tessl Code Review',
     '',
     heading,
-    ...(outcome.approved === true && suggestions.length > 0
+    // The line that answers why an approving review still lists findings —
+    // worded as the published body words it.
+    ...(outcome.approved === true && optionalCount > 0
       ? [
           '',
-          `${suggestions.length} optional ${suggestions.length === 1 ? 'suggestion' : 'suggestions'}. Nothing blocking.`,
+          `${optionalCount} optional ${optionalCount === 1 ? 'suggestion' : 'suggestions'}. Nothing blocking.`,
         ]
       : []),
-    ...renderContext({ result, mode }),
     ...(judgement === '' ? [] : ['', judgement]),
     ...renderSeverityTable(findings),
-    ...(mustFix.length === 0
+    ...(findings.length === 0
       ? []
-      : ['', '#### Must fix', '', ...renderFindingList(mustFix)]),
-    ...(suggestions.length === 0
-      ? []
-      : [
-          '',
-          `#### Suggestions (${suggestions.length})`,
-          '',
-          ...renderFindingList(suggestions),
-        ]),
+      : ['', '#### Findings', '', ...renderFindingList(findings)]),
     ...renderEarlierFindings(outcome.reconciliation),
-    ...renderLensSet(result),
     ...reviewLink({ result, repository, prNumber }),
   ];
 }
@@ -416,7 +341,7 @@ export function reviewJobSummary({
     typeof result.outcome === 'object';
   const lines = hasOutcome
     ? [
-        ...renderReviewedSummary({ result, mode, repository, prNumber }),
+        ...renderReviewedSummary({ result, repository, prNumber }),
         ...(VERDICT_STANDS_STATUSES.has(status)
           ? []
           : [
