@@ -497,3 +497,40 @@ test('more blocking findings than the cap are capped too, and counted', () => {
   assert.match(summary, /^### Changes requested \(60\)$/mu);
   assert.match(summary, /^- _and 10 more\._$/mu);
 });
+
+test('an untrusted severity cannot open a table column or break out of its label', () => {
+  const summary = summaryFor({
+    outcome: {
+      ...result().outcome,
+      findings: [
+        {
+          severity: 'major | 999 | <img src=x>',
+          title: 'A finding',
+          requiresChanges: true,
+          path: 'a.ts',
+          line: 1,
+        },
+        {
+          severity: '**bold**',
+          title: 'Another finding',
+          requiresChanges: false,
+          path: 'b.ts',
+          line: 2,
+        },
+      ],
+    },
+  });
+
+  // No unescaped pipe reaches a table row beyond the two the row itself has.
+  for (const row of summary.split('\n').filter((line) => line.startsWith('| '))) {
+    const unescaped = row.replace(/\\\|/gu, '');
+    assert.ok(
+      unescaped.split('|').length <= 4,
+      `a severity opened a table column: ${row}`,
+    );
+  }
+  assert.doesNotMatch(summary, /(?<!\\)<img/u);
+  assert.doesNotMatch(summary, /\*\*bold\*\*/u);
+  // The value still reads, capitalised, with its power removed.
+  assert.match(summary, /Major/u);
+});

@@ -140,11 +140,25 @@ function paragraphs(value, limit) {
   return capped(escaped, limit);
 }
 
+/**
+ * A severity as the table and the finding label show it.
+ *
+ * Rendered as prose in both places — a table cell, and inside a bold label — so
+ * it is escaped like every other prose value rather than treated as code-span
+ * content. An unescaped `|` would open a table column and an unescaped `*` would
+ * break out of the label, and the CLI producing this value is the caller's to
+ * choose, so it is bounded here rather than trusted.
+ *
+ * Capitalised before escaping, so a value that needs escaping still reads with
+ * its first letter capitalised rather than a backslash.
+ */
 function severityLabel(severity) {
-  const cleaned = codeText(severity, 40);
-  return cleaned === ''
-    ? 'Unknown'
-    : `${cleaned[0].toUpperCase()}${cleaned.slice(1)}`;
+  const cleaned = stripped(severity)
+    .replaceAll(/\s*\n\s*/gu, ' ')
+    .trim();
+  if (cleaned === '') return 'Unknown';
+  const titled = `${cleaned[0].toUpperCase()}${cleaned.slice(1)}`;
+  return capped(escapeInline(titled), 40);
 }
 
 /** A finding carries its location nested or flat, and both forms are published. */
