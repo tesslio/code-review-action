@@ -389,15 +389,26 @@ a link to the published review.
 
 It is written for a run that published nothing, too. That is the case it exists
 for: when publication fails the summary is the only place the completed review
-can still be read, and the terminal status is quoted beneath it so the review is
-not mistaken for one that reached the pull request. A run with no outcome at all
-writes the status the check run reports, plus the CLI's reason when there is a
-publishable one.
+can still be read.
+
+Only `approved`, `advisory-findings` and `changes-requested` present the review
+as the verdict for the head under check. Every other outcome-bearing terminal
+status — a failed publication, a superseded head, a policy fallback, a gate with
+no boolean verdict, a CLI that never reported what it reviewed, and any status a
+later revision adds — renders the review with the check run's own explanation
+quoted beneath it, so a summary can never contradict the status the check
+reports. The revision on the context line comes only from the outcome, never
+from the head this Action resolved: a CLI that did not say what it reviewed has
+not reviewed that head. A run with no outcome at all writes the status the check
+run reports, plus the CLI's reason when there is a publishable one.
 
 The summary never reports what the run cost. Model-authored text reaching it is
-bounded — control characters removed, judgement and titles length-capped, the
-whole summary capped well inside GitHub's limit — because it is untrusted input
-on a rendered surface.
+bounded, because it is untrusted input on a rendered surface: control characters
+and Unicode format characters are removed (bidirectional overrides included, so
+displayed text matches stored order), Markdown delimiters are escaped so nothing
+model-authored can open a heading, a list, a link, an image or raw HTML, values
+rendered inside a code span have their backticks removed, and every value plus
+the summary as a whole is length-capped.
 
 Writing the summary is best effort. A failure to write it is a notice; the
 review and the check run are unaffected.

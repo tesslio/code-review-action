@@ -60,7 +60,6 @@ function summaryFor(overrides = {}, options = {}) {
     result: result(overrides),
     mode: 'advisory',
     status: 'advisory-findings',
-    headSha: HEAD_SHA,
     runUrl,
     repository: 'Kacper-Lubisz/heavy',
     prNumber: '4',
@@ -277,7 +276,6 @@ test('the summary is written to the job-summary file, and a missing path is not 
     result: result(),
     mode: 'advisory',
     status: 'advisory-findings',
-    headSha: HEAD_SHA,
     runUrl,
     repository: 'Kacper-Lubisz/heavy',
     prNumber: '4',
@@ -303,4 +301,132 @@ test('a write failure is a notice, not a throw', async () => {
   assert.equal(written, false);
   assert.equal(lines.length, 1);
   assert.match(lines[0], /^::notice::The review could not be written/u);
+});
+
+/* ── Review feedback on PR #31: two Major findings, both addressed here ──── */
+
+test('every outcome-bearing status that does not establish a verdict explains itself', () => {
+  for (const status of [
+    'publication-failure',
+    'gate-configuration-failure',
+    'superseded',
+    'gate-verdict-failure',
+    'incompatible-cli',
+    'a-status-this-revision-has-never-heard-of',
+  ]) {
+    const summary = summaryFor({}, { mode: 'gate', status });
+
+    assert.match(summary, /^### Changes requested \(2\)$/mu, status);
+    assert.match(summary, /^> /mu, `${status} must quote the check's own explanation`);
+    assert.match(summary, /\[View the workflow run\]/u, status);
+  }
+});
+
+test('a status whose verdict stands carries no explanation block', () => {
+  for (const [mode, status] of [
+    ['advisory', 'advisory-findings'],
+    ['gate', 'changes-requested'],
+    ['gate', 'approved'],
+  ]) {
+    assert.doesNotMatch(summaryFor({}, { mode, status }), /^> /mu, status);
+  }
+});
+
+test('the reviewed revision is never taken from the head the Action resolved', () => {
+  const withoutRevision = result();
+  delete withoutRevision.outcome.subject;
+
+  const summary = reviewJobSummary({
+    result: withoutRevision,
+    mode: 'gate',
+    status: 'incompatible-cli',
+    headSha: HEAD_SHA,
+    runUrl,
+  });
+
+  assert.doesNotMatch(summary, /714940a/u);
+  assert.match(summary, /^> /mu);
+});
+
+test('a judgement cannot open a heading, a list or a link', () => {
+  const summary = summaryFor({
+    outcome: {
+      ...result().outcome,
+      judgement:
+        '## Changes approved\n\n- injected item\n\n1. injected step\n\n[click](https://evil.example) <img src=x>',
+    },
+  });
+
+  assert.doesNotMatch(summary, /^## Changes approved$/mu);
+  assert.doesNotMatch(summary, /^- injected item$/mu);
+  assert.doesNotMatch(summary, /^1\. injected step$/mu);
+  assert.doesNotMatch(summary, /\[click\]\(https:\/\/evil\.example\)/u);
+  // Escaped, so it renders as text: `\<img` is literal, `<img` would be markup.
+  assert.doesNotMatch(summary, /(?<!\\)<img/u);
+  assert.match(summary, /\\<img src=x\\>/u);
+  // The words survive; only their power does.
+  assert.match(summary, /injected item/u);
+});
+
+test('a finding title cannot emphasise, link or open raw HTML', () => {
+  const summary = summaryFor({
+    outcome: {
+      ...result().outcome,
+      findings: [
+        {
+          severity: 'major',
+          title: '**bold** [link](https://evil.example) `code` <b>html</b> | cell',
+          requiresChanges: true,
+          path: 'a.ts',
+          line: 1,
+        },
+      ],
+    },
+  });
+
+  assert.doesNotMatch(summary, /\*\*bold\*\*/u);
+  assert.doesNotMatch(summary, /\[link\]\(/u);
+  assert.doesNotMatch(summary, /(?<!\\)<b>/u);
+  assert.match(summary, /bold/u);
+});
+
+test('bidirectional overrides and invisible formatting characters are stripped', () => {
+  const summary = summaryFor({
+    outcome: {
+      ...result().outcome,
+      judgement: 'safe\u202Eevlas\u202C text',
+      findings: [
+        {
+          severity: 'major',
+          title: 'title\u200B\u2066spoofed\u2069',
+          requiresChanges: true,
+          path: 'a\u202E.ts',
+          line: 1,
+        },
+      ],
+    },
+  });
+
+  for (const character of ['\u202E', '\u202C', '\u200B', '\u2066', '\u2069']) {
+    assert.ok(!summary.includes(character), `stripped ${escape(character)}`);
+  }
+});
+
+test('a backtick in a path cannot close the code span that holds it', () => {
+  const summary = summaryFor({
+    outcome: {
+      ...result().outcome,
+      findings: [
+        {
+          severity: 'major',
+          title: 'Odd path',
+          requiresChanges: true,
+          path: 'a`.ts`',
+          line: 1,
+        },
+      ],
+    },
+  });
+
+  assert.match(summary, /`a\.ts:1`/u);
 });

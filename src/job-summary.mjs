@@ -15,11 +15,14 @@
  * Cost is deliberately absent. The summary reports what the review found and
  * what it asserted about the commit; what the round spent is not part of that.
  *
- * Everything the model wrote — the judgement, the finding titles — is untrusted
- * input reaching a rendered surface, so it is bounded here: control characters
- * removed, length capped, and never interpolated into anything but Markdown
- * text. The whole summary is capped an order of magnitude inside GitHub's own
- * limit, so a long review cannot silently lose its own verdict.
+ * Everything the model wrote — the judgement, the finding titles, the locations
+ * — is untrusted input reaching a rendered surface, so it is bounded here:
+ * control and Unicode format characters removed (bidirectional overrides
+ * included, so displayed text matches stored order), Markdown delimiters
+ * escaped so nothing model-authored can create a heading, a link, an image or
+ * raw HTML, and every value length-capped. The whole summary is capped an order
+ * of magnitude inside GitHub's own limit, so a long review cannot silently lose
+ * its own verdict.
  */
 
 import { appendFile } from 'node:fs/promises';
@@ -30,8 +33,26 @@ import { PUBLISHED_STATUSES, publicationReceipt } from './result-file.mjs';
 /** Ordered worst-first. An unrecognised severity sorts after every known one. */
 const SEVERITY_RANK = ['critical', 'major', 'minor', 'nit'];
 
-/** Control characters, which corrupt a rendered page rather than appearing in it. */
-const CONTROL_CHARACTERS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
+/**
+ * Characters removed from every model-authored value.
+ *
+ * C0/C1 controls corrupt the rendered page rather than appearing in it, and
+ * `\p{Cf}` — the Unicode format category — carries the bidirectional overrides
+ * and invisible joiners that make displayed text differ from its stored order.
+ * A reviewer reading a finding has to be reading the finding.
+ */
+const STRIPPED_CHARACTERS = /[\p{Cf}\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu;
+
+/**
+ * Markdown delimiters escaped wherever model text is rendered as prose, so a
+ * title or judgement cannot create a link, an image, emphasis, a code span or
+ * raw HTML on a surface a reviewer reads as ours.
+ */
+const INLINE_MARKDOWN = /[\\`*_[\]<>|~]/gu;
+
+/** Block openers, escaped only where they would start a block: at line start. */
+const BLOCK_OPENER = /^(\s*)([#>+=-])/u;
+const ORDERED_MARKER = /^(\s*)(\d{1,9})([.)])/u;
 
 /** Enough for the longest judgement a supervisor has written, and bounded. */
 const JUDGEMENT_LIMIT = 4000;
@@ -51,34 +72,66 @@ const RECONCILIATION_PROSE = {
   declined: (count) => `${count} declined`,
 };
 
-/**
- * Model-authored text, made safe to place in Markdown as one line.
- *
- * Newlines collapse because a finding title is a single line in a list, and an
- * embedded newline would break out of it.
- */
-function text(value, limit) {
-  if (typeof value !== 'string') return '';
-  const collapsed = value
-    .replaceAll(CONTROL_CHARACTERS, '')
-    .replaceAll(/\s*\n\s*/gu, ' ')
-    .trim();
-  return collapsed.length > limit
-    ? `${collapsed.slice(0, limit).trimEnd()}…`
-    : collapsed;
+/** Strip what must never render, whatever the value is used for. */
+function stripped(value) {
+  return typeof value === 'string' ? value.replaceAll(STRIPPED_CHARACTERS, '') : '';
 }
 
-/** Multi-line model text: the same cleaning, but paragraphs survive. */
+function capped(value, limit) {
+  return value.length > limit ? `${value.slice(0, limit).trimEnd()}…` : value;
+}
+
+function escapeInline(value) {
+  return value.replaceAll(INLINE_MARKDOWN, (character) => `\\${character}`);
+}
+
+/**
+ * Model-authored text rendered as one line of prose: stripped, collapsed onto a
+ * single line so it cannot break out of the list item that holds it, escaped so
+ * every Markdown delimiter in it is literal, then capped.
+ */
+function text(value, limit) {
+  const collapsed = stripped(value)
+    .replaceAll(/\s*\n\s*/gu, ' ')
+    .trim();
+  return capped(escapeInline(collapsed), limit);
+}
+
+/**
+ * Model-authored text rendered inside a code span: stripped, collapsed, and its
+ * backticks removed rather than escaped.
+ *
+ * Markdown delimiters are already inert inside a code span, so escaping them
+ * would show the backslashes; the backtick is the one character that can close
+ * the span, and it has no business in a path or a severity.
+ */
+function codeText(value, limit) {
+  const collapsed = stripped(value)
+    .replaceAll(/\s*\n\s*/gu, ' ')
+    .replaceAll('`', '')
+    .trim();
+  return capped(collapsed, limit);
+}
+
+/**
+ * The judgement: multi-line model text whose paragraphs are worth keeping.
+ *
+ * Inline delimiters are escaped as everywhere else, and each line's leading
+ * block opener is escaped too — otherwise a judgement can open a heading and
+ * state a verdict this summary never reached.
+ */
 function paragraphs(value, limit) {
-  if (typeof value !== 'string') return '';
-  const cleaned = value.replaceAll(CONTROL_CHARACTERS, '').trim();
-  return cleaned.length > limit
-    ? `${cleaned.slice(0, limit).trimEnd()}…`
-    : cleaned;
+  const escaped = escapeInline(stripped(value).trim())
+    .split('\n')
+    .map((line) =>
+      line.replace(BLOCK_OPENER, '$1\\$2').replace(ORDERED_MARKER, '$1$2\\$3'),
+    )
+    .join('\n');
+  return capped(escaped, limit);
 }
 
 function severityLabel(severity) {
-  const cleaned = text(severity, 40);
+  const cleaned = codeText(severity, 40);
   return cleaned === ''
     ? 'Unknown'
     : `${cleaned[0].toUpperCase()}${cleaned.slice(1)}`;
@@ -108,7 +161,7 @@ function findingLocation(finding) {
   const path = finding?.path ?? finding?.location?.path;
   const line = finding?.line ?? finding?.location?.line;
   const label = [path, line].filter((part) => part !== undefined).join(':');
-  return text(label, LOCATION_LIMIT);
+  return codeText(label, LOCATION_LIMIT);
 }
 
 function severityIndex(severity) {
@@ -183,11 +236,17 @@ export function formatDuration(durationMs) {
     : `${minutes}m ${String(seconds).padStart(2, '0')}s`;
 }
 
-/** The run's facts, as one line. Never a cost. */
-function renderContext({ result, mode, headSha }) {
+/**
+ * The run's facts, as one line. Never a cost.
+ *
+ * The revision comes only from the outcome, never from the head this Action
+ * resolved: a CLI that did not report what it reviewed has not reviewed the
+ * Action's head, and printing it here would assert that it had.
+ */
+function renderContext({ result, mode }) {
   const lenses = result?.outcome?.lenses;
   const durationMs = result?.diagnostics?.durationMs;
-  const reviewedHead = result?.outcome?.subject?.change?.headRevision ?? headSha;
+  const reviewedHead = result?.outcome?.subject?.change?.headRevision;
   const parts = [mode];
   if (Array.isArray(lenses)) {
     parts.push(`${lenses.length} ${lenses.length === 1 ? 'lens' : 'lenses'}`);
@@ -242,11 +301,20 @@ function reviewLink({ result, repository, prNumber }) {
   return ['', `[View the published review](${url})`];
 }
 
-/** The statuses whose run completed a review it could not fully publish. */
-const UNPUBLISHED_REVIEW_STATUSES = new Set([
-  'publication-failure',
-  'gate-configuration-failure',
-  'superseded',
+/**
+ * The terminal statuses whose review stands for the head under check.
+ *
+ * Named as the set that *does* stand, so every other outcome-bearing status —
+ * a publication that failed, a head superseded before publication, a policy
+ * fallback, a gate with no boolean verdict, a CLI that never said what it
+ * reviewed, and any status a later revision adds — carries the check's own
+ * explanation beneath the review. Fails closed: an unrecognised status is
+ * explained rather than presented as a verdict.
+ */
+const VERDICT_STANDS_STATUSES = new Set([
+  'approved',
+  'advisory-findings',
+  'changes-requested',
 ]);
 
 /**
@@ -257,7 +325,7 @@ const UNPUBLISHED_REVIEW_STATUSES = new Set([
  * `requiresChanges` — rather than by severity, so the summary groups them the
  * way the product decided them.
  */
-function renderReviewedSummary({ result, mode, headSha, repository, prNumber }) {
+function renderReviewedSummary({ result, mode, repository, prNumber }) {
   const outcome = result.outcome;
   const findings = Array.isArray(outcome.findings) ? outcome.findings : [];
   const mustFix = findings.filter(
@@ -282,7 +350,7 @@ function renderReviewedSummary({ result, mode, headSha, repository, prNumber }) 
           `${suggestions.length} optional ${suggestions.length === 1 ? 'suggestion' : 'suggestions'}. Nothing blocking.`,
         ]
       : []),
-    ...renderContext({ result, mode, headSha }),
+    ...renderContext({ result, mode }),
     ...(judgement === '' ? [] : ['', judgement]),
     ...renderSeverityTable(findings),
     ...(mustFix.length === 0
@@ -318,7 +386,7 @@ function renderStatusOnlySummary({ mode, status, reason, runUrl }) {
     '',
     report.summary,
     ...(typeof reason === 'string' && reason !== ''
-      ? ['', `The Tessl CLI reported: \`${text(reason, TITLE_LIMIT)}\``]
+      ? ['', `The Tessl CLI reported: \`${codeText(reason, TITLE_LIMIT)}\``]
       : []),
     ...(typeof runUrl === 'string' && runUrl !== ''
       ? ['', `[View the workflow run](${runUrl})`]
@@ -338,7 +406,6 @@ export function reviewJobSummary({
   mode,
   status,
   reason,
-  headSha,
   runUrl,
   repository,
   prNumber,
@@ -349,22 +416,19 @@ export function reviewJobSummary({
     typeof result.outcome === 'object';
   const lines = hasOutcome
     ? [
-        ...renderReviewedSummary({
-          result,
-          mode,
-          headSha,
-          repository,
-          prNumber,
-        }),
-        ...(UNPUBLISHED_REVIEW_STATUSES.has(status)
-          ? [
+        ...renderReviewedSummary({ result, mode, repository, prNumber }),
+        ...(VERDICT_STANDS_STATUSES.has(status)
+          ? []
+          : [
               '',
               `> ${checkRunReport({ mode, status, reason: undefined }).summary}`,
+              ...(typeof reason === 'string' && reason !== ''
+                ? ['', `The Tessl CLI reported: \`${codeText(reason, TITLE_LIMIT)}\``]
+                : []),
               ...(typeof runUrl === 'string' && runUrl !== ''
                 ? ['', `[View the workflow run](${runUrl})`]
                 : []),
-            ]
-          : []),
+            ]),
       ]
     : renderStatusOnlySummary({ mode, status, reason, runUrl });
   const body = `${lines.join('\n')}\n`;

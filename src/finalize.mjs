@@ -159,7 +159,6 @@ async function writeReviewJobSummary(result, status, reason) {
     mode,
     status,
     reason,
-    headSha: process.env.HEAD_SHA,
     runUrl: process.env.RUN_URL,
     repository: process.env.REPOSITORY,
     prNumber: process.env.PR_NUMBER,
