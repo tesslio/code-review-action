@@ -583,3 +583,23 @@ test('a value ending in whitespace cannot leave a trailing-space line break', ()
 
   assert.doesNotMatch(summary, /  $/mu);
 });
+
+test('a location is displayed exactly as the CLI reported it, tabs and doubled spaces included', () => {
+  const summary = summaryFor({
+    outcome: {
+      ...result().outcome,
+      findings: [
+        {
+          severity: 'major',
+          title: 'Two  spaces and a\ttab in the title',
+          requiresChanges: true,
+          path: 'dir/a\tb  c.ts',
+          line: 3,
+        },
+      ],
+    },
+  });
+
+  assert.match(summary, /`dir\/a\tb  c\.ts:3`/u, 'the path is not rewritten');
+  assert.match(summary, /Two  spaces and a\ttab in the title/u);
+});

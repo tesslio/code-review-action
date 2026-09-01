@@ -69,7 +69,7 @@ const INLINE_MARKDOWN = /[\\`*_[\]<>|~]/gu;
  * to be handled in one place: a value that reaches a rendered surface with any
  * of them intact can start a new line, and a new line can open a heading.
  */
-const LINE_ENDINGS = /[\r\n\u2028\u2029]/gu;
+const LINE_ENDINGS = /[\r\n\u2028\u2029]+/gu;
 
 /** Block openers, escaped only where they would start a block: at line start. */
 const BLOCK_OPENER = /^(\s*)([#>+=-])/u;
@@ -107,18 +107,19 @@ function escapeInline(value) {
 }
 
 /**
- * A model-authored value flattened to one line: stripped, every line ending
- * turned into a space, and whitespace runs squeezed.
+ * A model-authored value flattened to one line: stripped, each run of line
+ * endings replaced by a single space, then trimmed.
  *
- * The squeeze matters as much as the replacement — a line ending surrounded by
- * spaces would otherwise leave a run of them where the break was, and two
- * trailing spaces are themselves a Markdown line break.
+ * Interior whitespace is left exactly as the CLI reported it. A path may legally
+ * contain a tab or a double space, and rewriting one would show a reader a
+ * location that does not match the file — a worse outcome than the Markdown
+ * artefact the rewriting was guarding against. Trimming is what closes that
+ * artefact: a Markdown hard break is trailing spaces immediately before a line
+ * ending, and a trimmed value has no trailing spaces to pair with the newline
+ * this renderer appends.
  */
 function oneLine(value) {
-  return stripped(value)
-    .replaceAll(LINE_ENDINGS, ' ')
-    .replaceAll(/\s+/gu, ' ')
-    .trim();
+  return stripped(value).replaceAll(LINE_ENDINGS, ' ').trim();
 }
 
 /**
