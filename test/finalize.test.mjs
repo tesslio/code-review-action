@@ -169,7 +169,14 @@ test('a superseded run explains itself in the run and the check', async () => {
   assert.equal(exitCode, 1);
   assert.match(outputs, /status=superseded/);
   assert.match(stdout, /^::warning::.*no review was published/m);
-  assert.equal(stdout.trim().split('\n').length, 1);
+  // One warning and no more: the superseded explanation must not arrive beside a
+  // second, competing one. Counted as warnings rather than as lines, because the
+  // step also reports whether the review reached the job summary, and that
+  // notice is not a warning about this run.
+  assert.equal(
+    stdout.split('\n').filter((line) => line.startsWith('::warning::')).length,
+    1,
+  );
   assert.doesNotMatch(stdout, /ai-notice:v1/);
   assert.match(requests, /"conclusion":"neutral"/);
   assert.match(requests, /reviews the newer commit/);
