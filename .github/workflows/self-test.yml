@@ -7,10 +7,18 @@ name: Self-test
 # credit and publishes a review to the pull request. Add the `self-test` label
 # when you want it; remove and re-add the label to run it again.
 #
-# Why a label and not `workflow_dispatch`: GitHub only offers a dispatch for
-# workflows present on the default branch, so a dispatch-only workflow added in a
-# pull request cannot be triggered. A `pull_request` event uses the workflow file
-# from the pull request's head, which is exactly the code under test.
+# Same-repository pull requests only. This job runs `uses: ./` — the head's own
+# Action code — with a Tessl credential and a write-capable GitHub token, so a
+# fork could rewrite `action.yml` or anything under `src/` and read the secret.
+# Applying a label already needs write access, but that mitigates who starts the
+# run rather than whose code it runs, so the head repository is checked
+# explicitly. Once this workflow is on the default branch it should become a
+# `workflow_dispatch`, which cannot be fork-controlled at all; a dispatch is
+# unavailable here because GitHub only offers dispatches for workflows already on
+# the default branch.
+#
+# A `pull_request` event uses the workflow file from the pull request's head,
+# which is exactly the code under test.
 on:
   pull_request:
     types: [labeled]
@@ -30,7 +38,9 @@ concurrency:
 jobs:
   review:
     name: review this pull request with this pull request's Action
-    if: github.event.label.name == 'self-test'
+    if: >-
+      github.event.label.name == 'self-test' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
