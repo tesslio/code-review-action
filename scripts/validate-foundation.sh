@@ -33,8 +33,23 @@ fi
 # major tag the README recommends to every caller. The exemption accepts the
 # forms YAML allows around that reference — either quote style, and a trailing
 # comment — so a rewrapped line does not read as an unpinned dependency.
-if grep -rnE 'uses:[[:space:]]+[^./][^@[:space:]]+@(main|master|latest|v[0-9]+([.][0-9]+)*)' .github/workflows action.yml \
-  | grep -vE "uses:[[:space:]]+['\"]?tesslio/code-review-action@v[0-9]+['\"]?([[:space:]]+#.*)?[[:space:]]*$"; then
+unpinned=0
+while IFS= read -r line; do
+  reference="${line#*uses:}"
+  reference="${reference#"${reference%%[![:space:]]*}"}"
+  reference="${reference%%[[:space:]]*}"
+  reference="${reference#[\"\']}"
+  reference="${reference%[\"\']}"
+  if [[ "$reference" == ./* ]] ||
+     [[ "$reference" =~ ^tesslio/code-review-action@v[0-9]+$ ]] ||
+     [[ "$reference" =~ ^[^@[:space:]]+@[[:xdigit:]]{40}$ ]] ||
+     [[ "$reference" =~ ^docker://[^@[:space:]]+@sha256:[[:xdigit:]]{64}$ ]]; then
+    continue
+  fi
+  echo "unpinned Action reference: $reference" >&2
+  unpinned=1
+done < <(grep -rhE '^[[:space:]]*(-[[:space:]]+)?uses:' .github/workflows action.yml)
+if (( unpinned )); then
   echo "third-party Actions must be pinned by full commit SHA" >&2
   exit 1
 fi

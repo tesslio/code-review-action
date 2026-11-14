@@ -10,6 +10,38 @@ function response(status, body = '') {
   });
 }
 
+test('retries a GET when reading its response body fails', async () => {
+  let calls = 0;
+  const delays = [];
+  const api = new GitHubCodeReviewApi({
+    token: 'token', repository: 'acme/widgets', retryDelaysMs: [5],
+    sleep: async (delay) => delays.push(delay),
+    fetchImpl: async () => {
+      calls++;
+      return calls === 1
+        ? new Response(new ReadableStream({ start(controller) { controller.error(new Error('connection reset')); } }))
+        : response(200, '{"ok":true}');
+    },
+  });
+  assert.deepEqual(await api.request('/test'), { ok: true });
+  assert.equal(calls, 2);
+  assert.deepEqual(delays, [5]);
+});
+
+test('does not replay a POST when its response body fails', async () => {
+  let calls = 0;
+  const api = new GitHubCodeReviewApi({
+    token: 'token', repository: 'acme/widgets', retryDelaysMs: [0],
+    sleep: async () => {},
+    fetchImpl: async () => {
+      calls++;
+      return new Response(new ReadableStream({ start(controller) { controller.error(new Error('connection reset')); } }));
+    },
+  });
+  await assert.rejects(api.request('/test', { method: 'POST', body: {} }), /connection reset/);
+  assert.equal(calls, 1);
+});
+
 test('uses a timeout and retries bounded transient failures', async () => {
   const calls = [];
   const delays = [];

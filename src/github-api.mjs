@@ -135,6 +135,7 @@ export class GitHubCodeReviewApi {
     for (let attempt = 0; ; attempt++) {
       const canRetry = method !== 'POST';
       let response;
+      let text;
       try {
         response = await this.fetchImpl(`${API_ORIGIN}${path}`, {
           method,
@@ -147,12 +148,12 @@ export class GitHubCodeReviewApi {
           ...(body === undefined ? {} : { body: JSON.stringify(body) }),
           signal: AbortSignal.timeout(this.timeoutMs),
         });
+        text = await response.text();
       } catch (error) {
         if (!canRetry || attempt >= this.retryDelaysMs.length) throw error;
         await this.sleep(this.retryDelaysMs[attempt]);
         continue;
       }
-      const text = await response.text();
       if (response.ok) {
         return {
           body: text.length === 0 ? undefined : JSON.parse(text),
